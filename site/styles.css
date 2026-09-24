@@ -332,8 +332,10 @@ h2 { font-size: clamp(30px, 4.2vw, 54px); line-height: 1.08; letter-spacing: -.0
   .showcase { grid-template-columns: 1fr; }
   .card-photo { min-height: 420px; }
   .agent { grid-template-columns: 1fr; }
-  .portrait { aspect-ratio: 16 / 10; min-height: 0; }
-  .portrait img { object-position: 50% 25%; }
+  /* 4:3 keeps the whole face: at 16:10 a square portrait loses 37% of its height and
+     the crop landed on the forehead, with eyes at the bottom edge and no chin. */
+  .portrait { aspect-ratio: 4 / 3; min-height: 0; }
+  .portrait img { object-position: 50% 60%; }
   .trio { grid-template-columns: 1fr; }
   h2 { text-align: left; }
 }
