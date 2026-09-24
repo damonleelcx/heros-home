@@ -28,3 +28,4 @@ INSTANCE=i-05f4712279b04fac5 deploy/release.sh --dry-run  # server-side dry run
 ```
 
 Portraits in `site/img/` are copied from each agent's own repository; update them there first.
+Images are cached for 7 days: a changed image gets a new filename (`aqiao-2.webp` → `aqiao-3.webp`), never an overwrite.
