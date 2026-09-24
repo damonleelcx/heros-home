@@ -1,0 +1,60 @@
+# Static landing page for heros-agent.space. No database, no secrets, no egress.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: home
+  namespace: home
+  labels: { app.kubernetes.io/name: home, app.kubernetes.io/part-of: home }
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app.kubernetes.io/name: home } }
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: home, app.kubernetes.io/part-of: home }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: HOME_IMAGE
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          # nginx writes its pid and temp files under /tmp in the unprivileged image.
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 32Mi }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: home, namespace: home }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app.kubernetes.io/name: home } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: home
+  namespace: home
+spec:
+  selector: { app.kubernetes.io/name: home }
+  ports: [{ name: http, port: 80, targetPort: http }]
