@@ -1,6 +1,6 @@
 # heros-home
 
-The landing page at **https://heros-agent.space** — introduces the four agents hosted on the same node:
+The landing page at **https://heros-agent.space** — introduces the five agents hosted on the same node:
 
 | Agent | Where |
 |---|---|
@@ -8,6 +8,7 @@ The landing page at **https://heros-agent.space** — introduces the four agents
 | 阿桥 Opportunity Bridge — jobs, training, subsidies | https://jobs.heros-agent.space |
 | FORGE — engineering design, out loud | https://forge.heros-agent.space |
 | Vera — counsel & care, with licensed people | https://act.heros-agent.space |
+| Aoi (Play with Agents) — Texas Hold’em and custom board games with friends and AI players | https://play.heros-agent.space |
 
 Static HTML/CSS in `site/` (English / 中文 toggle), served by unprivileged nginx.
 

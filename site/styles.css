@@ -205,6 +205,7 @@ mark { background: var(--lime); color: var(--ink); padding: 0 2px; }
 .s2 { left: 34px; top: -14px; }
 .s3 { right: -4px; top: 6px; }
 .s4 { right: -18px; top: 70px; }
+.s5 { left: -8px; top: 100px; }
 
 /* ── wordmark strip ── */
 .marquee {
@@ -221,6 +222,7 @@ mark { background: var(--lime); color: var(--ink); padding: 0 2px; }
 .wm-aqiao { font-family: "Noto Sans SC", var(--sans); font-weight: 700; }
 .wm-forge { font-family: var(--sans); font-weight: 700; letter-spacing: .28em; font-stretch: condensed; }
 .wm-vera { font-family: var(--serif); font-style: italic; font-weight: 400; }
+.wm-aoi { font-family: var(--sans); font-weight: 800; letter-spacing: .16em; }
 
 /* ── sections ── */
 section.agents, section.principles, section.closing {
