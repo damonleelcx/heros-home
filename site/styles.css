@@ -307,6 +307,30 @@ h2 { font-size: clamp(30px, 4.2vw, 54px); line-height: 1.08; letter-spacing: -.0
 }
 .closing-links a:hover { background: var(--lime); color: var(--ink); border-color: var(--lime); }
 
+/* Sponsor: the Afdian card beside a short ask, before the footer. */
+.sponsor {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: clamp(28px, 6vw, 88px);
+  margin: 0 clamp(16px, 5vw, 76px) 72px; padding: clamp(28px, 5vw, 56px);
+  border: 1px solid var(--line); border-radius: calc(var(--r) * 1.6); background: var(--ink-2);
+}
+.sponsor h2 { margin: 14px 0 18px; text-align: left; }
+.sponsor p { color: var(--muted); max-width: 520px; line-height: 1.6; }
+.sponsor .sponsor-hint { color: var(--lime); font-weight: 600; margin-top: 22px; }
+.sponsor-card { margin: 0; }
+.sponsor-card img {
+  display: block; width: min(320px, 70vw); height: auto; border-radius: var(--r);
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .06);
+  transform: rotate(2deg); transition: transform .35s ease;
+}
+.sponsor-card img:hover { transform: rotate(0) scale(1.02); }
+@media (max-width: 760px) {
+  .sponsor { grid-template-columns: 1fr; text-align: center; }
+  .sponsor h2 { text-align: center; }
+  .sponsor p { margin-left: auto; margin-right: auto; }
+  .sponsor-card { justify-self: center; }
+  .sponsor .sponsor-hint span[aria-hidden] { display: none; }
+}
+
 .foot {
   border-top: 1px solid var(--line); margin: 0 clamp(16px, 5vw, 76px); padding: 26px 0 34px;
   display: flex; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap;
