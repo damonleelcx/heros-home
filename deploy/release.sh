@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Build the linux/arm64 image, push it to ECR by an immutable tag, and deploy it pinned by digest.
-#   INSTANCE=i-… deploy/release.sh [--dry-run]
+#   deploy/release.sh [--dry-run]
 set -euo pipefail
+# Account-specific identifiers live in deploy/deploy.env (gitignored); see deploy.env.example.
+[ -f "$(dirname "$0")/deploy.env" ] && { set -a; . "$(dirname "$0")/deploy.env"; set +a; }
 cd "$(dirname "$0")/.."
 REGION=${REGION:-us-east-1}
 REPO=heros-home

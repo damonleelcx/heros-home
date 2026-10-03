@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Apply the landing page to the k3s node over SSM. Idempotent.
-#   INSTANCE=i-… deploy/deploy.sh <registry>/heros-home@sha256:… [--dry-run]
+#   deploy/deploy.sh <registry>/heros-home@sha256:… [--dry-run]
 set -euo pipefail
+# Account-specific identifiers live in deploy/deploy.env (gitignored); see deploy.env.example.
+[ -f "$(dirname "$0")/deploy.env" ] && { set -a; . "$(dirname "$0")/deploy.env"; set +a; }
 IMAGE="${1:?usage: deploy.sh <registry/heros-home@sha256:...> [--dry-run]}"
 DRY="${2:-}"
 [[ "$IMAGE" == *@sha256:* ]] || { echo "pin the image by digest (…@sha256:…), not a tag" >&2; exit 2; }

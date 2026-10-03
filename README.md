@@ -20,12 +20,18 @@ python -m http.server 8088 -d site
 
 ## Deploy
 
-k3s on `i-05f4712279b04fac5`, namespace `home`, Traefik + cert-manager (`letsencrypt-prod`).
+A k3s node reached over SSM, namespace `home`, Traefik + cert-manager (`letsencrypt-prod`).
 No database, no secrets, no egress.
 
+The node's instance id is not in this repository. Put it in `deploy/deploy.env`, which is gitignored:
+
 ```bash
-INSTANCE=i-05f4712279b04fac5 deploy/release.sh            # build arm64 → ECR heros-home → apply by digest
-INSTANCE=i-05f4712279b04fac5 deploy/release.sh --dry-run  # server-side dry run
+cp deploy/deploy.env.example deploy/deploy.env   # then set INSTANCE
+```
+
+```bash
+deploy/release.sh            # build arm64 → ECR heros-home → apply by digest
+deploy/release.sh --dry-run  # server-side dry run
 ```
 
 Portraits in `site/img/` are copied from each agent's own repository; update them there first.
