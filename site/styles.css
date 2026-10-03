@@ -326,7 +326,7 @@ h2 { font-size: clamp(30px, 4.2vw, 54px); line-height: 1.08; letter-spacing: -.0
 .patreon:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
 .sponsor-card { margin: 0; }
 .sponsor-card img {
-  display: block; width: min(320px, 70vw); height: auto; border-radius: var(--r);
+  display: block; width: min(400px, 78vw); height: auto; border-radius: var(--r);
   box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .06);
   transform: rotate(2deg); transition: transform .35s ease;
 }
