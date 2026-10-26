@@ -1,0 +1,169 @@
+# The market desk in its own namespace, so the static `home` pod keeps no egress and no secrets.
+#   desk-coordinator  schedule, wake-ups, planning, replanning (1 replica: it is the only scheduler)
+#   desk-worker       leases tasks from the durable queue (scale freely)
+#   desk-web          serves the published timeline.json read-only at heros-agent.space/data/market/
+# State is one SQLite file (WAL) on a node-local volume: every pod must land on the single k3s node.
+# Moving to several nodes means swapping store.py for Postgres; the queue semantics stay the same.
+# The LLM key is a Secret created out of band:
+#   kubectl -n market create secret generic desk-llm --from-literal=QWEN_LLM_API_KEY_V2=…
+apiVersion: v1
+kind: Namespace
+metadata: { name: market, labels: { app.kubernetes.io/part-of: market } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: desk-state, namespace: market }
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: desk-coordinator, namespace: market, labels: { app.kubernetes.io/name: desk-coordinator, app.kubernetes.io/part-of: market } }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: desk-coordinator } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: desk-coordinator, app.kubernetes.io/part-of: market, desk/egress: none } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: desk
+          image: DESK_IMAGE
+          args: [coordinator]
+          resources: { requests: { cpu: 10m, memory: 48Mi }, limits: { cpu: 300m, memory: 160Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts: [{ name: state, mountPath: /var/lib/desk }, { name: tmp, mountPath: /tmp }]
+      volumes:
+        - { name: state, persistentVolumeClaim: { claimName: desk-state } }
+        - { name: tmp, emptyDir: { sizeLimit: 32Mi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: desk-worker, namespace: market, labels: { app.kubernetes.io/name: desk-worker, app.kubernetes.io/part-of: market } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app.kubernetes.io/name: desk-worker } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: desk-worker, app.kubernetes.io/part-of: market, desk/egress: https } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      # A killed worker loses nothing: its lease lapses and another worker resumes the task.
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: desk
+          image: DESK_IMAGE
+          args: [worker]
+          envFrom: [{ secretRef: { name: desk-llm, optional: true } }]
+          resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts: [{ name: state, mountPath: /var/lib/desk }, { name: tmp, mountPath: /tmp }]
+      volumes:
+        - { name: state, persistentVolumeClaim: { claimName: desk-state } }
+        - { name: tmp, emptyDir: { sizeLimit: 32Mi } }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: desk-web, namespace: market }
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      server_tokens off;
+      location = /healthz { access_log off; default_type text/plain; return 200 "ok\n"; }
+      location = /data/market/timeline.json {
+        alias /var/lib/desk/pub/timeline.json;
+        default_type application/json;
+        add_header Cache-Control "no-cache" always;
+        add_header Content-Security-Policy "default-src 'none'" always;
+        add_header X-Content-Type-Options nosniff always;
+      }
+      location / { return 404; }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: desk-web, namespace: market, labels: { app.kubernetes.io/name: desk-web, app.kubernetes.io/part-of: market } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: desk-web } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: desk-web, app.kubernetes.io/part-of: market, desk/egress: none } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: web
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          resources: { requests: { cpu: 5m, memory: 16Mi }, limits: { cpu: 100m, memory: 48Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts:
+            - { name: state, mountPath: /var/lib/desk, readOnly: true }
+            - { name: conf, mountPath: /etc/nginx/conf.d }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: state, persistentVolumeClaim: { claimName: desk-state, readOnly: true } }
+        - { name: conf, configMap: { name: desk-web } }
+        - { name: tmp, emptyDir: { sizeLimit: 16Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: desk-web, namespace: market }
+spec:
+  selector: { app.kubernetes.io/name: desk-web }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+# The same host as the landing page; Traefik routes the longer path prefix here.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: desk-web
+  namespace: market
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: heros-agent.space
+      http:
+        paths:
+          - path: /data/market/
+            pathType: Prefix
+            backend: { service: { name: desk-web, port: { number: 80 } } }
+  tls:
+    - hosts: [heros-agent.space]
+      secretName: desk-web-tls
+---
+# Only Traefik may reach the web pod; nothing reaches the coordinator or workers.
+# Workers get DNS + HTTPS out; the tool layer then allowlists hosts (config.ALLOWED_HOSTS).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: desk-default, namespace: market }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: traefik } }
+      ports: [{ protocol: TCP, port: 8080 }]
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: desk-worker-egress, namespace: market }
+spec:
+  podSelector: { matchLabels: { desk/egress: https } }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: [{ ipBlock: { cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16] } }]
+      ports: [{ protocol: TCP, port: 443 }]

@@ -27,6 +27,7 @@
     <svg viewBox="0 0 32 32" aria-hidden="true"><g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M16 3v26M3 16h26M6.8 6.8l18.4 18.4M25.2 6.8 6.8 25.2"/></g></svg>
   </a>
   <nav class="links" aria-label="Sections">
+    <a href="#markets"><span lang="en">Markets</span><span lang="zh">市场观察</span></a>
     <a href="#agents"><span lang="en">Agents</span><span lang="zh">智能体</span></a>
     <a href="#how"><span lang="en">How they work</span><span lang="zh">工作方式</span></a>
     <a href="#principles"><span lang="en">Principles</span><span lang="zh">原则</span></a>
@@ -117,6 +118,43 @@
     <li><a href="https://act.heros-agent.space/" class="wm wm-vera">Vera<small>· 维拉</small></a></li>
     <li><a href="https://play.heros-agent.space/" class="wm wm-aoi">AOI<small>· 葵 · Play with Agents</small></a></li>
   </ul>
+</section>
+
+<section class="markets is-loading" id="markets" aria-labelledby="markets-h">
+  <div class="section-head">
+    <span class="eyebrow"><span lang="en">Market watch · calls for the next two weeks</span><span lang="zh">市场观察 · 未来两周涨跌判断</span></span>
+    <h2 id="markets-h"><span lang="en">What moves the Dow, Nasdaq<br>and S&amp;P 500 next — and which way</span><span lang="zh">下一步撼动道指、纳指和标普的事件<br>以及涨跌方向</span></h2>
+  </div>
+  <div class="mk-indices" id="mk-indices" aria-live="polite"></div>
+  <div class="mk-board">
+    <div class="mk-main">
+      <div class="mk-views" role="group" aria-label="View">
+        <button type="button" data-mk-view="timeline" aria-pressed="true"><span lang="en">Timeline</span><span lang="zh">时间线</span></button>
+        <button type="button" data-mk-view="calendar" aria-pressed="false"><span lang="en">Calendar</span><span lang="zh">日历</span></button>
+      </div>
+      <div id="mk-view-timeline">
+        <div class="mk-filters" role="toolbar" aria-label="Filter events">
+          <button type="button" data-mk-cat="all" aria-pressed="true"><span lang="en">All</span><span lang="zh">全部</span></button>
+          <button type="button" data-mk-cat="macro" aria-pressed="false"><span lang="en">Fed &amp; macro</span><span lang="zh">美联储与宏观</span></button>
+          <button type="button" data-mk-cat="earnings" aria-pressed="false"><span lang="en">Earnings</span><span lang="zh">财报</span></button>
+          <button type="button" id="mk-high" class="mk-toggle" aria-pressed="false"><span lang="en">High impact only</span><span lang="zh">只看高影响</span></button>
+        </div>
+        <ol class="mk-timeline" id="mk-timeline">
+          <li class="mk-empty"><span lang="en">Loading the desk’s latest run…</span><span lang="zh">正在载入最新结果…</span></li>
+        </ol>
+      </div>
+      <div id="mk-view-calendar" hidden>
+        <div class="mk-cal-grid" id="mk-cal-grid"></div>
+        <p class="mk-cal-legend"><span lang="en">▲ up / ▼ down, with the probability the call is right. Past sessions show the close and ✓ / ✗. Pick a day for its events.</span><span lang="zh">▲ 涨 / ▼ 跌，百分比为判断正确的概率。已过交易日显示收盘涨跌与 ✓ / ✗。点选日期查看当日事件。</span></p>
+        <div class="mk-cal-bottom">
+          <div class="mk-cal-detail" id="mk-cal-detail"></div>
+          <aside class="mk-cal-record" id="mk-cal-record"></aside>
+        </div>
+      </div>
+    </div>
+    <aside class="mk-run" id="mk-run" aria-label="How this timeline was made"></aside>
+  </div>
+  <p class="mk-disclaimer"><span lang="en">AI-generated market commentary for information only — not investment advice. Each up/down call carries the probability it is right; before a release that edge is small, and every call is scored against the close so you can judge it yourself.</span><span lang="zh">AI 生成的市场评论，仅供参考，不构成投资建议。每个涨跌判断都附有正确概率；数据公布前优势很小，所有判断都会以收盘结果评分，供你自行判断。</span></p>
 </section>
 
 <section class="agents" id="agents">
@@ -277,5 +315,6 @@
 </footer>
 </div>
 <script src="/lang.js" defer></script>
+<script src="/market.js" defer></script>
 </body>
 </html>

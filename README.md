@@ -12,6 +12,9 @@ The landing page at **https://heros-agent.space** — introduces the five agents
 
 Static HTML/CSS in `site/` (English / 中文 toggle), served by unprivileged nginx.
 
+The **Market watch** section reads `/data/market/timeline.json`, published by the multi-agent market desk in
+[`market/`](market/README.md) (its own namespace; the landing page itself still has no egress and no secrets).
+
 ## Run locally
 
 ```bash
