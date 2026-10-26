@@ -239,6 +239,20 @@ spec:
           podSelector: { matchLabels: { app.kubernetes.io/name: traefik } }
       ports: [{ protocol: TCP, port: 8080 }]
 ---
+# cert-manager's HTTP-01 solver pods (desk-web-tls renewals) must be reachable by Traefik, or the
+# default deny above leaves every challenge at 502.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: desk-acme-solver-ingress, namespace: market }
+spec:
+  podSelector: { matchLabels: { acme.cert-manager.io/http01-solver: "true" } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: traefik } }
+      ports: [{ protocol: TCP, port: 8089 }]
+---
 # Only the coordinator and workers reach the database.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
