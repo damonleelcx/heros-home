@@ -27,9 +27,10 @@ the Nasdaq Composite and the S&P 500, and which way is each index more likely to
 | Part | What it shows |
 |---|---|
 | **Index strip** | The last close and daily change for the Dow, Nasdaq and S&P 500, plus the VIX and the 10-year Treasury yield |
-| **Timeline** | Every trading day in the next two weeks, in order. Each day opens with a **session call** for each index. Under it are the day’s events, each with its time (Eastern), category, impact level, consensus and prior figures, and an **up ▲ or down ▼ call for each index, with a probability and how big the reaction is likely to be** |
+| **Timeline** | Every trading day in the next two weeks, in order. Before the open, today's call shows the overnight futures it was read from. Each day opens with a **session call** for each index. Under it are the day’s events, each with its time (Eastern), category, impact level, consensus and prior figures, and an **up ▲ or down ▼ call for each index, with a probability and how big the reaction is likely to be** |
 | **Calendar** | Monday-to-Friday weeks. Each day shows how many events it has, how many are high impact, and the three session calls. Pick a day to see its events. Past days show what the index actually did, with ✓ or ✗ against the call |
-| **Track record** | How often the calls were right for each index, and a Brier score (0.25 is a coin flip; lower is better) |
+| **Track record** | How often the calls were right for each index, how often the calls with a lean were right, and a Brier score (0.25 is a coin flip; lower is better) |
+| **The pre-open signal, tested** | How often the close followed the opening move on the last 12 months of sessions the model never saw, next to simply leaning up, and how the 9:20 AM futures reading did over the last ~50 sessions |
 | **Event details** | A one-line read of the event, the upside and downside cases, what to watch, how confident the call is, and where the data came from |
 | **How this was made** | When it was last updated, how many sources answered, whether any analysis was sent back and redone, and whether the calls came from the AI analyst or the rules-based baseline |
 | **Headlines** | The latest market-moving headlines |
@@ -72,17 +73,46 @@ levels, and CNBC and MarketWatch for headlines.
    afterwards. After the close it is checked against what the index actually did, and the result goes
    into the track record.
 
+### The pre-open call: where the real edge is
+
+For a day a week away, nobody knows which way the market will close, so those calls stay close to
+50%. The one strong, measurable guide is **where the market opens**. Over the last five years, when the
+S&P 500 opened more than 0.5% higher it closed higher 84% of the time; when it opened more than 0.5%
+lower it closed higher only 13% of the time. Index futures trade overnight and show where the open is
+heading.
+
+So on every trading day:
+
+1. At **9:20 AM ET** the desk reads S&P 500, Nasdaq-100 and Dow futures against the previous 4 PM ET close.
+2. It turns that move into a probability with a model fitted on five years of history, and combines it
+   with the day's events.
+3. At **9:30 AM ET**, the open, the call **locks**. Later updates can't change it; the page marks it
+   "Locked at the open" and scores it against the close.
+
+Tested on the last 12 months of sessions the model never saw, this was right about **70% of the time**
+(Dow 69%, S&P 500 70%, Nasdaq 73%) against 53% for leaning up every day. Read from futures at 9:20, as it
+is done live, it was right 69–81% of the time over the last 48 sessions. The model is refitted every
+Sunday, and an independent check refuses it unless it beats leaning up on data it hasn't seen.
+
+**After-hours reports:** when a company such as Microsoft or Amazon reports after the close, its stock
+moves in after-hours trading. The desk translates that move into each index — by company size for the
+S&P 500 and Nasdaq, by share price for the Dow — and folds it into the next morning's call.
+
+**No clear lean:** a call between 48% and 52% shows as "– No clear lean" instead of an arrow. It still
+counts in the Brier score, but the track record also shows how the calls with a lean did on their own.
+
 ### How sure it is
 
-Before a release, the probabilities stay modest: at most 66% from the baseline and 85% from the AI
-analyst. After the figure is out, the baseline can reach 80%. Most calls sit close to 50–60%, because
-honestly that is how much anyone can know in advance. The track record is there so you can judge the
-calls for yourself.
+Days ahead, the probabilities stay modest: at most 66% from the baseline and 85% from the AI analyst,
+and most sit close to 50–60%, because honestly that is how much anyone can know in advance. The
+pre-open call can go higher — up to 90% — when futures have moved clearly. The track record is there
+so you can judge the calls for yourself.
 
 ### When it updates
 
-Three times each weekday, at **7:30 AM, 12:00 PM and 4:30 PM Eastern**, and again **15 minutes after each
-major release**, so the timeline shows the actual figure and a fresh call.
+Three times each weekday, at **7:30 AM, 12:00 PM and 4:30 PM Eastern**, plus the **9:20 AM pre-open
+update**, and again **15 minutes after each major release**, so the timeline shows the actual figure (or
+the after-hours reaction) and a fresh call.
 
 ### What it is not
 

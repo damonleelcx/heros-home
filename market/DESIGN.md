@@ -46,6 +46,8 @@ Replan / continue / complete; publish; schedule wake-ups
 |---|---|---|
 | `refresh_timeline` | timers 07:30 / 12:00 / 16:30 ET on weekdays; post-event wake-ups; `desk run` | collect → merge → verify → analyse ×N → critique ×N → assemble → verify → publish |
 | `source_probe` | hourly timer; operator | one call per source; health stored in shared knowledge; three failures in a row escalate |
+| `calibrate_signals` | Sundays 18:00 ET; first start with no calibration | 5-year daily history ×3 + 60-day 5-min futures ×3 → backtest (fit on 4 years, test on the last 252 sessions, check the 9:20 futures reading) → verifier (positive slope, ≥200 test sessions, beats the always-up baseline's Brier) → commit to `knowledge/calibration` |
+| `preopen_call` | weekdays 09:20 ET | live futures ×3 → re-read today's call from the last published timeline → verify → publish; the 9:30 open locks it |
 
 ### Event-driven variants of `refresh_timeline`
 
@@ -103,6 +105,8 @@ the tools its contract grants. The mission state is global and only the coordina
 | `rss_headlines(feed)` | net.read | no | CNBC, MarketWatch | named feeds only; https links only |
 | `index_quote(symbol)` | net.read | no | Yahoo chart API (query1 → query2) | `^SYMBOL` pattern; 429-aware |
 | `llm_json(system, user)` | llm.call | no (uses plan quota) | Qwen Token Plan, OpenAI-compatible (`qwen3.7-plus`) | mission budget: calls, tokens, USD; key from Secrets Manager `market/prod` in k8s, env or `E:\repos\.ENV` locally |
+| `daily_history(symbol, range)` | net.read | no | Yahoo chart API | `^INDEX` only; 1y/2y/5y |
+| `intraday(symbol, range, prepost)` | net.read | no | Yahoo chart API, 5-minute bars | `ES=F`/`NQ=F`/`YM=F` or a stock ticker from the earnings calendar; 1d/5d/60d |
 | `publish_file(name, doc)` | fs.publish | **yes** | local volume | name pattern; atomic rename; idempotency key; publish lock |
 
 Every call checks the contract's permissions and the host allowlist **before** a socket opens, and is
@@ -120,6 +124,10 @@ recorded in `usage` (latency, tokens, cost, success).
 | `index_sensitivity` | analyst, critic, aggregator | 0–3 exposure of each index to an event (Dow membership, Nasdaq heavyweights, market cap) |
 | `predict_event` — the baseline predictor | analyst fallback, analyst input | drift, momentum, consensus-implied change, surprise vs consensus once released, expected earnings change, beat base rate; probability capped at 66 % before a release, 80 % after |
 | `day_outlook` | data | combines a day's event calls, weighted by exposure, sub-linear in the count |
+| `fit_logistic`, `backtest_gap` | data | P(up close \| open gap) fitted by Newton's method; out-of-sample test against the always-up baseline |
+| `futures_move`, `futures_check` | data | the overnight futures move (prior 4 PM ET bar → latest bar), and the same reading backtested at 9:20 ET |
+| `after_hours_move`, `implied_index_move` | data | a reporter's after-hours move, translated into each index (cap weight, or price ÷ Dow divisor) |
+| `combine`, `gap_probability` | data | market evidence added in log-odds to the event view (events at half weight) |
 | `score_calls` | data | hit rate and Brier score per index against realised closes |
 | `rules_impact` | analyst fallback | bilingual summary, scenarios and what to watch |
 | `advice_language`, `unsupported_numbers` | critic, verifier | refuses advice wording; flags numbers whose value (allowing sign, rounding and K/M/万/亿 units) appears nowhere in the inputs |
@@ -151,7 +159,7 @@ collect.headlines ─(soft)                                                     
 | `locks` | leases on shared resources (`publish:market-timeline`) |
 | `escalations` | what needs a human, why, how it was resolved |
 | `timers` | scheduled and event-driven wake-ups; the timer id is the mission's idempotency key |
-| `knowledge` | long-term memory by namespace: `analysis_cache` (12 h), `outlook_log` (frozen calls), `source_health`, `eval_cases`, `published`, `risks`, `hooked` |
+| `knowledge` | long-term memory by namespace: `analysis_cache` (12 h), `outlook_log` (calls frozen at 9:30 ET, with the futures that informed them), `calibration` (the verified signal), `source_health`, `eval_cases`, `published` (incl. the last full timeline, for the pre-open update), `risks`, `hooked` |
 | `usage` | every tool and model call: latency, tokens, cost, success |
 
 Memory layers: **mission state** (missions/tasks) · **working memory** (checkpoints) · **episodic history**

@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import threading
 import unittest
+from datetime import datetime
 
 from desk import skills
 from desk.agents import CONTRACTS
@@ -430,7 +431,100 @@ class Sessions(Base):
         self.assertEqual(skills.session_for({"date": "2026-10-31", "time_et": "10:00"}), "2026-11-02")    # Saturday
 
 
+class Signals(Base):
+    def calibrate(self):
+        mid, _ = self.coord.submit("calibrate_signals", {})
+        return mid, pump(self.coord, [self.worker()], self.clock, mid)
+
+    def test_calibration_beats_the_baseline_out_of_sample_and_is_committed(self):
+        mid, m = self.calibrate()
+        self.assertEqual(m["status"], "succeeded")
+        cal = self.store.recall("calibration", "signals")
+        for k in skills.INDICES:
+            v = cal["indices"][k]
+            self.assertGreater(v["b"], 0)
+            self.assertLess(v["test"]["brier"], v["baseline"]["brier"])
+            self.assertGreater(v["test"]["hit_rate"], v["baseline"]["hit_rate"])
+            self.assertEqual(v["test"]["n"], 252)
+            self.assertIsNotNone(v["futures"])          # the 9:20 futures reading was checked too
+
+    def test_a_calibration_that_does_not_beat_the_baseline_is_refused(self):
+        self.fx.gap_sign = -1                           # history where the gap points the wrong way
+        mid, m = self.calibrate()
+        self.assertEqual(m["status"], "failed")
+        self.assertIsNone(self.store.recall("calibration", "signals"))
+        self.assertTrue(any("verify.calibration" in (e["task_id"] or "") for e in self.coord.q.escalations()))
+
+    def test_futures_move_today_s_call_before_the_open_and_the_open_locks_it(self):
+        self.calibrate()
+        mid, m = self.run_mission()                     # 03:33 ET Monday: futures +0.8 / +0.9 / +0.6 %
+        self.assertEqual(m["status"], "succeeded")
+        today = next(d for d in timeline(self.cfg)["days"] if d["date"] == START)
+        for k in skills.INDICES:
+            self.assertEqual(today["outlook"][k]["direction"], "up")
+            self.assertGreater(today["outlook"][k]["probability"], 0.75)
+        self.assertEqual(today["preopen"]["GSPC"]["symbol"], "ES=F")
+        frozen = self.store.recall("outlook_log", START)
+        self.assertEqual(frozen["calls"]["GSPC"], today["outlook"]["GSPC"])
+        self.assertEqual(frozen["preopen"]["GSPC"]["move_pct"], 0.8)
+        # 9:20 ET: futures have turned down. The pre-open update moves the call; it is still before 9:30.
+        self.clock.t = datetime.fromisoformat(skills.et_to_utc(START, "09:20")).timestamp()
+        self.fx.futures_move = {"ES=F": -1.0, "NQ=F": -1.2, "YM=F": -0.9}
+        mid2, _ = self.coord.submit("preopen_call", {})
+        self.assertEqual(pump(self.coord, [self.worker()], self.clock, mid2)["status"], "succeeded")
+        today = next(d for d in timeline(self.cfg)["days"] if d["date"] == START)
+        self.assertEqual(today["outlook"]["GSPC"]["direction"], "down")
+        locked = self.store.recall("outlook_log", START)["calls"]["GSPC"]
+        self.assertEqual(locked["direction"], "down")
+        # 10:00 ET: the session has opened. A later update cannot change the call, and the page shows the lock.
+        self.clock.t = datetime.fromisoformat(skills.et_to_utc(START, "10:00")).timestamp()
+        self.fx.futures_move = {"ES=F": 2.0, "NQ=F": 2.0, "YM=F": 2.0}
+        mid3, _ = self.coord.submit("refresh_timeline", PARAMS, idem_key="late")
+        self.assertEqual(pump(self.coord, [self.worker()], self.clock, mid3)["status"], "succeeded")
+        today = next(d for d in timeline(self.cfg)["days"] if d["date"] == START)
+        self.assertEqual(today["outlook"]["GSPC"], locked)
+        self.assertIn("locked", today)
+        self.assertEqual(self.store.recall("outlook_log", START)["calls"]["GSPC"], locked)
+
+    def test_after_hours_moves_reprice_overnight_reports(self):
+        self.calibrate()
+        self.clock.t = datetime.fromisoformat(skills.et_to_utc("2026-10-29", "18:00")).timestamp()  # after both reports
+        mid, m = self.run_mission()
+        self.assertEqual(m["status"], "succeeded")
+        evs = {e.get("symbol"): e for d in timeline(self.cfg)["days"] for e in d["events"]}
+        msft, amzn = evs["MSFT"]["analysis"], evs["AMZN"]["analysis"]
+        self.assertEqual(msft["after_hours"]["move_pct"], 5.0)
+        self.assertGreater(msft["after_hours"]["implied_pct"]["GSPC"], 0.2)   # $3.9T × 5% of a $60T index
+        self.assertGreater(msft["after_hours"]["implied_pct"]["DJI"], 0)      # a Dow member
+        self.assertEqual(msft["impacts"]["IXIC"]["direction"], "up")
+        self.assertEqual(amzn["impacts"]["GSPC"]["direction"], "down")
+        self.assertGreater(msft["impacts"]["IXIC"]["probability"], 0.6)
+
+    def test_without_a_calibration_signals_are_skipped_not_guessed(self):
+        mid, m = self.run_mission()
+        today = next(d for d in timeline(self.cfg)["days"] if d["date"] == START)
+        self.assertNotIn("preopen", today)
+        self.assertTrue(all(c["probability"] <= 0.66 for c in today["outlook"].values()))
+
+
 class Skills(unittest.TestCase):
+    def test_no_lean_calls_are_scored_apart(self):
+        log = {"2026-10-22": {k: {"direction": "up", "probability": 0.51} for k in skills.INDICES},
+               "2026-10-23": {k: {"direction": "down", "probability": 0.7} for k in skills.INDICES}}
+        hist = {k: [["2026-10-21", 100.0], ["2026-10-22", 99.0], ["2026-10-23", 98.0]] for k in skills.INDICES}
+        _, rec = skills.score_calls(log, hist)
+        self.assertEqual((rec["GSPC"]["n"], rec["GSPC"]["hits"]), (2, 1))
+        self.assertEqual((rec["GSPC"]["lean_n"], rec["GSPC"]["lean_hit_rate"]), (1, 1.0))
+
+    def test_logistic_fit_recovers_a_known_relation(self):
+        import math, random
+        rnd = random.Random(3)
+        xs = [rnd.gauss(0, 0.5) for _ in range(4000)]
+        ys = [1 if rnd.random() < 1 / (1 + math.exp(-(0.1 + 2.0 * x))) else 0 for x in xs]
+        a, b = skills.fit_logistic(xs, ys)
+        self.assertAlmostEqual(b, 2.0, delta=0.25)
+        self.assertAlmostEqual(a, 0.1, delta=0.1)
+
     def test_predictor_reads_the_surprise_once_the_figure_is_out(self):
         cpi = {"id": "x", "kind": "macro", "category": "inflation", "tier": 1, "title": "CPI inflation",
                "figures": [{"name": "Core CPI", "consensus": "0.3%", "previous": "0.3%", "actual": "0.6%"}]}

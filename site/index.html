@@ -137,7 +137,8 @@
           </div>
           <ul>
             <li><span lang="en"><b>50%</b> is a coin flip. The further from 50%, the stronger the call. Before a release most calls sit between 50% and 60%.</span><span lang="zh"><b>50%</b> 相当于抛硬币，离 50% 越远判断越强。数据公布前，多数判断在 50%–60% 之间。</span></li>
-            <li><span lang="en"><b>▲ up / ▼ down</b> is the more likely direction for that index.</span><span lang="zh"><b>▲ 涨 / ▼ 跌</b>是该指数更可能的方向。</span></li>
+            <li><span lang="en"><b>▲ up / ▼ down</b> is the more likely direction for that index. <b>– No clear lean</b> means 48–52%: no real edge either way.</span><span lang="zh"><b>▲ 涨 / ▼ 跌</b>是该指数更可能的方向。<b>– 无明显倾向</b>表示 48%–52%，两边都没有真正的优势。</span></li>
+            <li><span lang="en"><b>Before the open</b> (about 9:20 AM ET) the call for that day is re-read from index futures — the strongest guide there is to the day’s close, tested in the calendar view — and then <b>locked at 9:30</b>. Days further ahead have no such signal, so most of their calls sit near 50%.</span><span lang="zh"><b>开盘前</b>（美东约上午 9:20）会根据股指期货重新判断当天走势——这是收盘方向最有力的指引，回测见日历视图——然后在 <b>9:30 锁定</b>。更远的日期没有这类信号，所以大多接近 50%。</span></li>
             <li><span lang="en"><b>Low / medium / high impact</b> is how much this kind of event usually moves that index.</span><span lang="zh"><b>低 / 中 / 高影响</b>表示这类事件通常对该指数影响多大。</span></li>
             <li><span lang="en"><b>Call for the day</b> combines all of that day’s events into one call per index. A report after the 4 PM ET close counts toward the <b>next</b> trading day, when the market first trades on it.</span><span lang="zh"><b>当日判断</b>把当天所有事件合并成每个指数一个判断。美东下午 4 点收盘后发布的财报计入<b>下一个</b>交易日，因为市场在那时才首次反映。</span></li>
             <li><span lang="en">Every day’s call is locked before the open and checked against the close: see the calendar’s ✓ / ✗ and the track record.</span><span lang="zh">每天的判断在开盘前锁定、收盘后核对：见日历中的 ✓ / ✗ 与历史命中。</span></li>
@@ -164,7 +165,10 @@
         <p class="mk-cal-legend"><span lang="en">Each day shows the chance each index closes up ▲ or down ▼ that day (50% = coin flip). Past days show the actual close and ✓ / ✗. Pick a day for its events.</span><span lang="zh">每天显示各指数当天收涨 ▲ 或收跌 ▼ 的概率（50% 即抛硬币）。已过的交易日显示实际涨跌与 ✓ / ✗。点选日期查看当日事件。</span></p>
         <div class="mk-cal-bottom">
           <div class="mk-cal-detail" id="mk-cal-detail"></div>
-          <aside class="mk-cal-record" id="mk-cal-record"></aside>
+          <div class="mk-cal-side">
+            <aside class="mk-cal-record" id="mk-cal-record"></aside>
+            <aside class="mk-cal-record" id="mk-cal-backtest" hidden></aside>
+          </div>
         </div>
       </div>
     </div>

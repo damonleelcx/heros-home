@@ -118,8 +118,18 @@ class Coordinator:
             specs.append(TaskSpec(f"critic.b{n}", "critic", {"op": "review", "events": batch, "analysis_key": f"analyze.b{n}"},
                                   deps=[f"analyze.b{n}"], soft_deps=ctx))
             gates += [f"analyze.b{n}", f"critic.b{n}"]
+        # Overnight reporters whose results are already out: their after-hours move is evidence.
+        now = self.s.clock()
+        reported = [{"id": e["id"], "symbol": e["symbol"], "date": e["date"]} for e in events
+                    if e["kind"] == "earnings" and e.get("symbol") and e.get("session_date", e["date"]) != e["date"]
+                    and e.get("time_utc") and datetime.fromisoformat(e["time_utc"]).timestamp() < now]
+        signals = ["collect.futures"]
+        if reported:
+            specs.append(TaskSpec("collect.afterhours", "data", {"op": "afterhours", "events": reported},
+                                  deps=["verify.events"], required=False, max_attempts=2))
+            signals.append("collect.afterhours")
         specs.append(TaskSpec("assemble", "data", {"op": "assemble", **self._window(mid)},
-                              deps=["merge", "verify.events"] + gates, soft_deps=ctx))
+                              deps=["merge", "verify.events"] + gates, soft_deps=ctx + signals))
         specs.append(TaskSpec("verify.timeline", "verifier", {"op": "timeline"}, deps=["assemble"]))
         specs.append(TaskSpec("publish", "publisher", {"op": "publish"}, deps=["assemble", "verify.timeline"], max_attempts=4))
         self.q.add_tasks(mid, specs, parent="merge")
@@ -207,9 +217,10 @@ class Coordinator:
         return bool(due)
 
     def ensure_schedule(self, days: int = 2) -> int:
-        """Standing wake-ups: refresh pre-open, midday and after the close on weekdays; probe hourly."""
+        """Standing wake-ups: refresh early, midday and after the close on weekdays, the futures update
+        at 9:20 ET before the 9:30 lock, a weekly recalibration, and an hourly source probe."""
         added = 0
-        now = datetime.now(timezone.utc)
+        now = datetime.fromtimestamp(self.s.clock(), timezone.utc)
         for i in range(days + 1):
             d = (skills.now_et(now) + timedelta(days=i)).date()
             if d.weekday() >= 5:
@@ -218,6 +229,17 @@ class Coordinator:
                 due = datetime.fromisoformat(skills.et_to_utc(d.isoformat(), hhmm)).timestamp()
                 if due > self.s.clock():
                     added += self.add_timer(f"refresh:{d}:{hhmm}", due, "schedule", {"intent": "refresh_timeline"})
+            due = datetime.fromisoformat(skills.et_to_utc(d.isoformat(), "09:20")).timestamp()
+            if due > self.s.clock():
+                added += self.add_timer(f"preopen:{d}", due, "schedule", {"intent": "preopen_call"})
+        # Recalibrate every Sunday evening, and once at first start if there is no calibration yet.
+        et = skills.now_et(now)
+        sunday = (et + timedelta(days=(6 - et.weekday()) % 7)).date()
+        due = datetime.fromisoformat(skills.et_to_utc(sunday.isoformat(), "18:00")).timestamp()
+        if due > self.s.clock():
+            added += self.add_timer(f"calibrate:{sunday}", due, "schedule", {"intent": "calibrate_signals"})
+        if self.s.recall("calibration", "signals") is None:
+            self.submit("calibrate_signals", {}, idem_key=f"calibrate:bootstrap:{et.date()}")
         hour = now.replace(minute=5, second=0, microsecond=0) + timedelta(hours=1)
         added += self.add_timer(f"probe:{hour:%Y-%m-%dT%H}", hour.timestamp(), "schedule", {"intent": "source_probe"})
         return added
