@@ -1,1 +1,4 @@
 deploy/deploy.env
+market/var/
+site/data/
+__pycache__/

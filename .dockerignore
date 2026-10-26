@@ -2,3 +2,5 @@
 deploy
 .claude
 *.md
+site/data
+market
