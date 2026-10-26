@@ -583,3 +583,14 @@ button.mk-cal-cell:focus-visible { outline: 2px solid var(--lime); outline-offse
 .mk-key b { color: var(--paper); }
 .mk-key ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
 .mk-top .mk-overnight { color: #8fb4ff; border-color: color-mix(in srgb, #8fb4ff 50%, transparent); }
+
+/* market watch: no clear lean, pre-open futures, the lock, after hours, the backtest */
+.mk-chip.dir-none i { color: var(--muted); }
+.mk-chip.dir-none .mk-p { color: var(--muted); font-weight: 500; }
+.mk-cal-calls .dir-none i, .mk-cal-calls .dir-none span { color: var(--muted); }
+.mk-locked { font-size: 11.5px; font-weight: 700; color: var(--sun); border: 1px solid color-mix(in srgb, var(--sun) 45%, transparent); border-radius: 999px; padding: 3px 10px; }
+.mk-preopen { margin: -2px 0 10px; font-size: 13px; color: #d6d4cb; background: #1a1a12; border-left: 3px solid var(--lime); padding: 8px 12px; border-radius: 0 10px 10px 0; }
+.mk-ah { margin: 0 0 8px; font-size: 13px; color: #d6d4cb; }
+.mk-cal-side { display: grid; gap: 14px; align-content: start; }
+.mk-lean-rec { display: block; }
+.mk-bt-note { font-size: 12px; }

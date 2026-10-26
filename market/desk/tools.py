@@ -18,7 +18,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -53,6 +53,8 @@ TOOLS: dict[str, ToolSpec] = {t.name: t for t in [
     ToolSpec("earnings_calendar", "net.read", False, "Earnings reports scheduled for one day (Nasdaq calendar)"),
     ToolSpec("rss_headlines", "net.read", False, "Latest headlines from an allowlisted market-news RSS feed"),
     ToolSpec("index_quote", "net.read", False, "Last close and change for an index or rate (Yahoo chart API)"),
+    ToolSpec("daily_history", "net.read", False, "Daily open and close for an index, up to 5 years (Yahoo chart API)"),
+    ToolSpec("intraday", "net.read", False, "5-minute prices for index futures or a stock, incl. pre/after hours"),
     ToolSpec("llm_json", "llm.call", False, "One chat completion that must return a JSON object"),
     ToolSpec("publish_file", "fs.publish", True, "Atomically write a JSON file into the publish directory"),
 ]}
@@ -167,6 +169,39 @@ def parse_yahoo_chart(body: str) -> dict:
     }
 
 
+def _chart_result(body: str) -> dict:
+    try:
+        return json.loads(body)["chart"]["result"][0]
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as e:
+        raise ToolError(f"unexpected Yahoo chart payload: {e}")
+
+
+def parse_daily(body: str) -> list[list]:
+    from .skills import et_offset  # local: skills has no tools dependency
+    res = _chart_result(body)
+    q = (res.get("indicators", {}).get("quote") or [{}])[0]
+    out = []
+    for ts, o, c in zip(res.get("timestamp") or [], q.get("open") or [], q.get("close") or []):
+        if o and c:
+            t = datetime.fromtimestamp(ts, timezone.utc)
+            d = (t + timedelta(hours=et_offset(t.date()))).date()
+            out.append([d.isoformat(), round(float(o), 4), round(float(c), 4)])
+    if len(out) < 2:
+        raise ToolError("no daily history in Yahoo payload")
+    return out
+
+
+def parse_intraday(body: str) -> dict:
+    res = _chart_result(body)
+    meta = res.get("meta") or {}
+    closes = (res.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    bars = [[ts, round(float(c), 4)] for ts, c in zip(res.get("timestamp") or [], closes) if c]
+    reg = (meta.get("currentTradingPeriod") or {}).get("regular") or {}
+    return {"symbol": meta.get("symbol"), "bars": bars, "price": meta.get("regularMarketPrice"),
+            "prev_close": meta.get("chartPreviousClose") or meta.get("previousClose"),
+            "regular": [reg.get("start"), reg.get("end")], "as_of": meta.get("regularMarketTime")}
+
+
 # ── the toolbox ─────────────────────────────────────────────────────────────
 
 Fetch = Callable[[str, dict], str]
@@ -248,22 +283,39 @@ class Toolbox:
             raise ToolDenied(f"unknown feed {feed}")
         return parse_rss(self._get("rss_headlines", FEEDS[feed]), limit)
 
-    def index_quote(self, symbol: str) -> dict:
-        self._guard("index_quote")
-        if not re.fullmatch(r"\^[A-Z]{2,5}", symbol):
-            raise ToolDenied(f"symbol not allowed: {symbol}")
-        path = f"/v8/finance/chart/{urllib.parse.quote(symbol)}?range=1mo&interval=1d"
+    def _chart(self, tool: str, symbol: str, query: str) -> str:
+        path = f"/v8/finance/chart/{urllib.parse.quote(symbol)}?{query}"
         last: ToolError | None = None
         # Yahoo answers 429 to a full browser UA from a non-browser TLS client, and to bursts; a plain
         # UA, the second host and a short pause clear it.
         for host in ("query1", "query2"):
             try:
-                return parse_yahoo_chart(self._get("index_quote", f"https://{host}.finance.yahoo.com{path}",
-                                                   {"User-Agent": "Mozilla/5.0"}))
+                return self._get(tool, f"https://{host}.finance.yahoo.com{path}", {"User-Agent": "Mozilla/5.0"})
             except ToolError as e:
                 last = e
                 time.sleep(1.5)
         raise last
+
+    def index_quote(self, symbol: str) -> dict:
+        self._guard("index_quote")
+        if not re.fullmatch(r"\^[A-Z]{2,5}", symbol):
+            raise ToolDenied(f"symbol not allowed: {symbol}")
+        return parse_yahoo_chart(self._chart("index_quote", symbol, "range=1mo&interval=1d"))
+
+    def daily_history(self, symbol: str, rng: str = "5y") -> list[list]:
+        """[[date (ET), open, close], …] oldest first."""
+        self._guard("daily_history")
+        if not re.fullmatch(r"\^[A-Z]{2,5}", symbol) or rng not in ("1y", "2y", "5y"):
+            raise ToolDenied(f"not allowed: {symbol} {rng}")
+        return parse_daily(self._chart("daily_history", symbol, f"range={rng}&interval=1d"))
+
+    def intraday(self, symbol: str, rng: str = "1d", prepost: bool = False) -> dict:
+        """5-minute bars: {"bars": [[epoch, price], …], "regular": [start, end] epochs, "price", "prev_close"}."""
+        self._guard("intraday")
+        if not (re.fullmatch(r"(ES|NQ|YM)=F", symbol) or re.fullmatch(r"[A-Z]{1,5}(\.[A-Z])?", symbol))                 or rng not in ("1d", "5d", "60d"):
+            raise ToolDenied(f"not allowed: {symbol} {rng}")
+        q = f"range={rng}&interval=5m" + ("&includePrePost=true" if prepost else "")
+        return parse_intraday(self._chart("intraday", symbol, q))
 
     # llm.call
     def llm_json(self, system: str, user: str, max_tokens: int = 12000) -> dict:  # reasoning models think first

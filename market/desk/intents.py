@@ -51,10 +51,36 @@ def plan_refresh(p: dict, cfg: Config) -> list[TaskSpec]:
                                   {"op": "earnings", "day": d.isoformat()}, required=False))
     specs.append(TaskSpec("collect.headlines", "news_scout", {"op": "headlines", "feeds": FEEDS}, required=False))
     specs.append(TaskSpec("collect.snapshot", "data", {"op": "snapshot"}, required=False))
+    # Overnight futures: used for today's call only while it is still before the open.
+    specs.append(TaskSpec("collect.futures", "data", {"op": "futures"}, required=False, max_attempts=2))
     research = [s.key for s in specs if s.role == "researcher"]
     specs.append(TaskSpec("merge", "data", {"op": "merge", **rng}, soft_deps=research))
     specs.append(TaskSpec("verify.events", "verifier", {"op": "events"}, deps=["merge"]))
     return specs
+
+
+def plan_calibrate(p: dict, cfg: Config) -> list[TaskSpec]:
+    """Fit and backtest the open-gap signal; check the live futures reading against it; commit only
+    if a verifier agrees it beats the old baseline out of sample."""
+    specs = []
+    for k in ("DJI", "IXIC", "GSPC"):
+        specs.append(TaskSpec(f"history.{k}", "data", {"op": "history", "index": k}))
+        specs.append(TaskSpec(f"futures_bars.{k}", "data", {"op": "futures_bars", "index": k}, required=False))
+    specs.append(TaskSpec("backtest", "data", {"op": "backtest"}, deps=[s.key for s in specs if s.key.startswith("history.")],
+                          soft_deps=[s.key for s in specs if s.key.startswith("futures_bars.")]))
+    specs.append(TaskSpec("verify.calibration", "verifier", {"op": "calibration"}, deps=["backtest"]))
+    specs.append(TaskSpec("commit", "data", {"op": "commit_calibration"}, deps=["backtest", "verify.calibration"]))
+    return specs
+
+
+def plan_preopen(p: dict, cfg: Config) -> list[TaskSpec]:
+    """9:20 ET on trading days: re-read today's call from the futures, publish, and let the open lock it."""
+    return [
+        TaskSpec("collect.futures", "data", {"op": "futures"}),
+        TaskSpec("assemble", "data", {"op": "preopen"}, deps=["collect.futures"]),
+        TaskSpec("verify.timeline", "verifier", {"op": "timeline"}, deps=["assemble"]),
+        TaskSpec("publish", "publisher", {"op": "publish"}, deps=["assemble", "verify.timeline"], max_attempts=3),
+    ]
 
 
 def plan_probe(p: dict, cfg: Config) -> list[TaskSpec]:
@@ -78,6 +104,18 @@ INTENTS: dict[str, Intent] = {i.name: i for i in [
            "timeline.json published, verified, every event analysed (model or rules baseline)",
            "1-3 minutes", "any single source may fail; publish waits for a human if more than half fail",
            plan_refresh),
+    Intent("calibrate_signals",
+           "Fit and backtest the pre-open signal (open gap → close) and check the futures reading against it",
+           "weekly timer; on first start when no calibration exists",
+           "a calibration that beats the always-up baseline out of sample, committed to shared knowledge",
+           "under 1 minute", "if it does not beat the baseline the verifier refuses it and the old one stays",
+           plan_calibrate),
+    Intent("preopen_call",
+           "Update today's call for the day from the overnight index futures before the open",
+           "timer at 9:20 ET on weekdays",
+           "the call re-published before 9:30 ET, when it locks",
+           "under 30 seconds", "no futures or no calibration → the earlier call stands and locks as it is",
+           plan_preopen),
     Intent("source_probe",
            "Check that every data source answers and still parses",
            "timer (hourly) or operator CLI", "a health record per source in shared knowledge",

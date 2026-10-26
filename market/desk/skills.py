@@ -478,7 +478,7 @@ def score_calls(log: dict[str, dict], history: dict[str, list[list]]) -> tuple[d
     """Compare logged day calls with realised closes. Returns (per-day results, track record)."""
     closes = {k: {d: c for d, c in rows} for k, rows in history.items()}
     per_day: dict[str, dict] = {}
-    rec = {k: {"n": 0, "hits": 0, "brier": 0.0} for k in INDICES}
+    rec = {k: {"n": 0, "hits": 0, "brier": 0.0, "lean_n": 0, "lean_hits": 0} for k in INDICES}
     for day, calls in sorted(log.items()):
         res = {}
         for k in INDICES:
@@ -495,12 +495,204 @@ def score_calls(log: dict[str, dict], history: dict[str, list[list]]) -> tuple[d
             rec[k]["n"] += 1
             rec[k]["hits"] += int(hit)
             rec[k]["brier"] += (p_up - (1 if up else 0)) ** 2
+            if c["probability"] >= NO_LEAN:  # a "no clear lean" call claims nothing; count it apart
+                rec[k]["lean_n"] += 1
+                rec[k]["lean_hits"] += int(hit)
         if res:
             per_day[day] = res
     for k, r in rec.items():
         r["hit_rate"] = round(r["hits"] / r["n"], 3) if r["n"] else None
         r["brier"] = round(r["brier"] / r["n"], 4) if r["n"] else None
+        r["lean_hit_rate"] = round(r["lean_hits"] / r["lean_n"], 3) if r["lean_n"] else None
     return per_day, rec
+
+# ── market signals: the open gap, index futures, after-hours moves ──────────
+
+NO_LEAN = 0.52                    # below this a call has no meaningful edge either way
+FUTURES = {"GSPC": "ES=F", "IXIC": "NQ=F", "DJI": "YM=F"}   # E-mini S&P, Nasdaq-100, Dow
+# Approximate index sizes, to turn one company's move into an index move. Configurable because
+# they drift: total market caps (USD) for the cap-weighted two, the divisor for the price-weighted Dow.
+INDEX_CAP_USD = {"GSPC": 60e12, "IXIC": 38e12}
+DOW_DIVISOR = 0.1627
+MAX_P_SIGNAL = 0.9
+
+
+def _sigmoid(z: float) -> float:
+    return 1 / (1 + math.exp(-max(-35.0, min(35.0, z))))
+
+
+def _logit(p: float) -> float:
+    p = min(max(p, 1e-6), 1 - 1e-6)
+    return math.log(p / (1 - p))
+
+
+def fit_logistic(xs: list[float], ys: list[int], iters: int = 50, ridge: float = 1e-3) -> tuple[float, float]:
+    """P(y=1) = sigmoid(a + b·x), by Newton's method (two parameters, so no library needed)."""
+    a = _logit(max(1e-3, min(1 - 1e-3, sum(ys) / len(ys)))) if ys else 0.0
+    b = 0.0
+    for _ in range(iters):
+        ga = gb = haa = hab = hbb = 0.0
+        for x, y in zip(xs, ys):
+            p = _sigmoid(a + b * x)
+            w = p * (1 - p)
+            ga += y - p
+            gb += (y - p) * x
+            haa += w
+            hab += w * x
+            hbb += w * x * x
+        gb -= ridge * b
+        hbb += ridge
+        det = haa * hbb - hab * hab
+        if abs(det) < 1e-12:
+            break
+        da = (hbb * ga - hab * gb) / det
+        db = (haa * gb - hab * ga) / det
+        a, b = a + da, b + db
+        if abs(da) < 1e-9 and abs(db) < 1e-9:
+            break
+    return a, b
+
+
+def gap_probability(cal: dict, gap_pct: float) -> float:
+    """P(close above the prior close | the open — or the futures — is gap_pct away from it)."""
+    return min(MAX_P_SIGNAL, max(1 - MAX_P_SIGNAL, _sigmoid(cal["a"] + cal["b"] * gap_pct)))
+
+
+def _evaluate(pred: list[float], ys: list[int]) -> dict:
+    n = len(ys)
+    if not n:
+        return {"n": 0}
+    hits = sum(1 for p, y in zip(pred, ys) if (p >= 0.5) == (y == 1))
+    lean = [(p, y) for p, y in zip(pred, ys) if abs(p - 0.5) >= NO_LEAN - 0.5]
+    lean_hits = sum(1 for p, y in lean if (p >= 0.5) == (y == 1))
+    return {"n": n, "hit_rate": round(hits / n, 3),
+            "brier": round(sum((p - y) ** 2 for p, y in zip(pred, ys)) / n, 4),
+            "lean_n": len(lean), "lean_hit_rate": round(lean_hits / len(lean), 3) if lean else None}
+
+
+def backtest_gap(rows: list[list], test_days: int = 252) -> dict:
+    """Fit P(up close | open gap) on daily [date, open, close] rows; test on the last `test_days`.
+
+    The baseline is what the desk had before: the base rate of up days from the training years. The
+    coefficients that go into production are refit on every row once the test has passed.
+    """
+    xs, ys, dates = [], [], []
+    for (d0, _o0, c0), (d1, o1, c1) in zip(rows, rows[1:]):
+        if c0 and o1 and c1:
+            xs.append((o1 / c0 - 1) * 100)
+            ys.append(1 if c1 > c0 else 0)
+            dates.append(d1)
+    if len(xs) < test_days + 250:
+        raise ValueError(f"need at least {test_days + 250} sessions, have {len(xs)}")
+    tr_x, tr_y, te_x, te_y = xs[:-test_days], ys[:-test_days], xs[-test_days:], ys[-test_days:]
+    a, b = fit_logistic(tr_x, tr_y)
+    base = sum(tr_y) / len(tr_y)
+    test = _evaluate([_sigmoid(a + b * x) for x in te_x], te_y)
+    baseline = _evaluate([base] * len(te_y), te_y)
+    fa, fb = fit_logistic(xs, ys)
+    return {"a": round(fa, 5), "b": round(fb, 5), "sessions": len(xs), "from": dates[0], "to": dates[-1],
+            "test": test | {"from": dates[-test_days], "to": dates[-1]}, "baseline": baseline,
+            "up_rate": round(sum(ys) / len(ys), 3)}
+
+
+def _et_date_time(ts: float) -> tuple[str, str]:
+    t = datetime.fromtimestamp(ts, timezone.utc)
+    t += timedelta(hours=et_offset(t.date()))
+    return t.date().isoformat(), t.strftime("%H:%M")
+
+
+def futures_check(bars: list[list], closes: list[list], cal: dict, at: str = "09:00") -> dict:
+    """Test the live signal itself: the futures move from the prior 4:00 PM ET bar to the `at` ET bar,
+    run through the open-gap calibration, against the index's actual close-to-close direction.
+
+    bars: intraday futures [epoch, price]; closes: daily index [date, open, close].
+    """
+    by_day: dict[str, list[tuple[str, float]]] = {}
+    for ts, px in bars:
+        if px:
+            d, hm = _et_date_time(ts)
+            by_day.setdefault(d, []).append((hm, px))
+    close = {d: c for d, _o, c in closes if c}
+    days = sorted(d for d in close)
+    pred, ys, moves = [], [], []
+    for prev, day in zip(days, days[1:]):
+        settle = [px for hm, px in by_day.get(prev, []) if hm <= "16:00"]
+        pre = [px for hm, px in by_day.get(day, []) if hm <= at]
+        if not settle or not pre:
+            continue
+        move = (pre[-1] / settle[-1] - 1) * 100
+        moves.append(move)
+        pred.append(gap_probability(cal, move))
+        ys.append(1 if close[day] > close[prev] else 0)
+    return _evaluate(pred, ys) | {"at_et": at, "mean_abs_move_pct": round(sum(map(abs, moves)) / len(moves), 3) if moves else None}
+
+
+def futures_move(bars: list[list], day: str) -> dict | None:
+    """The overnight futures move into `day`'s session: from the prior session's 4:00 PM ET bar to the
+    latest bar on `day` — the same measurement futures_check() backtests."""
+    by_day: dict[str, list[tuple[str, float, float]]] = {}
+    for ts, px in bars:
+        if px:
+            d, hm = _et_date_time(ts)
+            by_day.setdefault(d, []).append((hm, px, ts))
+    # The prior session is the latest earlier day with a bar by 4:00 PM ET. On a Monday that skips
+    # Sunday, whose bars only start when Globex reopens at 6:00 PM.
+    settle, settle_day = [], None
+    for d in sorted((d for d in by_day if d < day), reverse=True):
+        settle = [x for x in by_day[d] if x[0] <= "16:00"]
+        if settle:
+            settle_day = d
+            break
+    now = by_day.get(day) or []
+    if not settle or not now:
+        return None
+    return {"move_pct": round((now[-1][1] / settle[-1][1] - 1) * 100, 4), "at_et": now[-1][0],
+            "settle_day": settle_day, "as_of": now[-1][2]}
+
+
+def after_hours_move(bars: list[list], report_day: str) -> dict | None:
+    """A stock's move from its 4:00 PM ET close on `report_day` to its latest after-hours or
+    pre-market bar. None until there is a bar after the close."""
+    close = after = None
+    for ts, px in bars:
+        d, hm = _et_date_time(ts)
+        if d == report_day and hm < "16:00":
+            close = px
+        elif close is not None and (d > report_day or hm >= "16:00"):
+            after = (px, ts, d, hm)
+    if close is None or after is None:
+        return None
+    return {"move_pct": round((after[0] / close - 1) * 100, 3), "close": close, "price": after[0],
+            "at": f"{after[2]} {after[3]} ET", "as_of": after[1]}
+
+
+def combine(p_signal: float, p_prior: float, prior_weight: float = 0.5) -> float:
+    """Add evidence in log-odds: the market signal at full weight, the event view at half (the
+    futures already price much of what the events say)."""
+    return _sigmoid(_logit(p_signal) + prior_weight * _logit(p_prior))
+
+
+def as_call(p_up: float) -> dict:
+    return {"direction": "up" if p_up >= 0.5 else "down", "probability": round(max(p_up, 1 - p_up), 3)}
+
+
+def p_up_of(call: dict) -> float:
+    p = float(call.get("probability") or 0.5)
+    return p if call.get("direction") != "down" else 1 - p
+
+
+def implied_index_move(e: dict, stock_move_pct: float, stock_price: float, snapshot: dict) -> dict[str, float]:
+    """One company's after-hours move, translated into each index's move (percent)."""
+    cap = e.get("market_cap_usd") or 0
+    out = {"GSPC": stock_move_pct * cap / INDEX_CAP_USD["GSPC"],
+           "IXIC": stock_move_pct * cap / INDEX_CAP_USD["IXIC"] if e.get("nasdaq_heavy") else 0.0,
+           "DJI": 0.0}
+    dji = (snapshot.get("DJI") or {}).get("price")
+    if e.get("in_dow") and dji and stock_price:
+        points = stock_price * stock_move_pct / 100 / DOW_DIVISOR
+        out["DJI"] = points / dji * 100
+    return {k: round(v, 4) for k, v in out.items()}
+
 
 # ── critic helpers ──────────────────────────────────────────────────────────
 

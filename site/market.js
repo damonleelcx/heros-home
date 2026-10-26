@@ -98,13 +98,16 @@
   }
 
   // ── calls ──
+  var NO_LEAN = 0.52;  // 48–52%: no meaningful edge either way
+  function noLean(c) { return !c || (Number(c.probability) || 0.5) < NO_LEAN; }
   function callChip(i, c, extra) {
     c = c || {};
-    var d = DIR[c.direction] || DIR.up;
-    var chip = el("span", "mk-chip dir-" + (c.direction || "up") + (c.magnitude ? " mag-" + c.magnitude : ""), [
-      el("i", null, [d[0]]),
+    var d = DIR[c.direction] || DIR.up, none = noLean(c);
+    var chip = el("span", "mk-chip " + (none ? "dir-none" : "dir-" + (c.direction || "up")) + (c.magnitude ? " mag-" + c.magnitude : ""), [
+      el("i", null, [none ? "–" : d[0]]),
       el("b", null, [bi(i[3], i[4])]),
-      el("span", "mk-p", [bi(pct(c.probability) + " chance " + d[1], d[2] + "的概率 " + pct(c.probability))]),
+      el("span", "mk-p", [none ? bi("No clear lean", "无明显倾向")
+        : bi(pct(c.probability) + " chance " + d[1], d[2] + "的概率 " + pct(c.probability))]),
       c.magnitude ? el("span", "mk-mag", [bi("· " + (MAG[c.magnitude] || MAG.low)[0] + " impact", "· " + (MAG[c.magnitude] || MAG.low)[1] + "影响")]) : null,
       extra || null
     ]);
@@ -113,6 +116,7 @@
   }
   // "Dow: 54% chance it closes higher than the previous close (46% lower)."
   function explain(i, c) {
+    if (noLean(c)) return i[1] + ": no clear lean — between 48% and 52% either way, which is no real edge.";
     var p = Math.round((Number(c.probability) || 0.5) * 100), up = c.direction !== "down";
     return i[1] + ": " + p + "% chance it closes " + (up ? "higher" : "lower") + " than the previous close (" +
       (100 - p) + "% " + (up ? "lower" : "higher") + ")." + (c.magnitude ? " Impact " + c.magnitude + ": how much this kind of event usually moves it." : "");
@@ -122,10 +126,38 @@
     IDX.forEach(function (i) { row.appendChild(callChip(i, (a.impacts || {})[i[0]])); });
     return row;
   }
-  function outlookRow(o, cls) {
-    var row = el("div", "mk-outlook" + (cls ? " " + cls : ""), [el("span", "mk-outlook-l", [bi("Call for the day", "当日判断")])]);
+  function outlookRow(o, day) {
+    var row = el("div", "mk-outlook", [el("span", "mk-outlook-l", [bi("Call for the day", "当日判断")])]);
     IDX.forEach(function (i) { row.appendChild(callChip(i, (o || {})[i[0]])); });
+    if (day && day.locked) {
+      var lock = el("span", "mk-locked", [bi("Locked at the open", "已在开盘时锁定")]);
+      lock.title = "This call was locked at 9:30 AM ET and is scored against the close.";
+      row.appendChild(lock);
+    }
     return row;
+  }
+  function signedPct(v, d) { return (v > 0 ? "+" : "") + Number(v).toFixed(d == null ? 2 : d) + "%"; }
+  // "Futures before the open: S&P +0.80% · Nasdaq +0.90% · Dow +0.60% (02:20 ET)"
+  function preopenLine(day) {
+    var pre = day && day.preopen;
+    if (!pre) return null;
+    var parts = IDX.filter(function (i) { return pre[i[0]]; }).map(function (i) {
+      return i[3] + " " + signedPct(pre[i[0]].move_pct);
+    });
+    var first = pre.GSPC || pre[Object.keys(pre)[0]] || {};
+    var at = first.at_et || "";
+    return el("p", "mk-preopen", [bi("Futures before the open: " + parts.join(" · ") + (at ? " (as of " + at + " ET)" : "") +
+      ". The opening move has been the strongest guide to the day’s close; this call locks at 9:30 AM ET.",
+      "开盘前期货：" + parts.join(" · ") + (at ? "（美东 " + at + "）" : "") + "。开盘变动一直是当日收盘最有力的指引；该判断在美东上午 9:30 锁定。")]);
+  }
+  function afterHoursLine(a) {
+    var ah = a && a.after_hours;
+    if (!ah) return null;
+    var imp = ah.implied_pct || {};
+    var parts = IDX.filter(function (i) { return imp[i[0]]; }).map(function (i) { return i[3] + " " + signedPct(imp[i[0]], 2); });
+    return el("p", "mk-ah", [bi("After hours: the stock is " + signedPct(ah.move_pct, 1) + " (" + ah.at + ")" +
+      (parts.length ? ", worth about " + parts.join(" · ") + " on the indices." : "."),
+      "盘后：股价 " + signedPct(ah.move_pct, 1) + "（" + ah.at + "）" + (parts.length ? "，约合指数 " + parts.join(" · ") + "。" : "。"))]);
   }
 
   function figures(e) {
@@ -169,13 +201,19 @@
         a.note ? el("span", null, [" · " + a.note]) : null
       ])
     ]);
-    var card = el("article", "mk-card", [head, el("h4", null, [bi(e.title, e.title_zh)]), figures(e), impactChips(a),
+    var card = el("article", "mk-card", [head, el("h4", null, [bi(e.title, e.title_zh)]), figures(e), afterHoursLine(a), impactChips(a),
       el("p", "mk-sum", [txt(a.summary)]), details]);
     var li = el("li", "mk-ev tier-" + e.tier + (past ? " is-past" : "") + (e.id === nextId ? " is-next" : ""), [
       el("div", "mk-time", [timeLabel(e)]), el("span", "mk-dot", []), card]);
     li.dataset.cat = e.kind === "earnings" ? "earnings" : "macro";
     li.dataset.tier = e.tier;
     return li;
+  }
+
+  function quietNote(d) {
+    return el("li", "mk-quiet", [d.preopen
+      ? bi("No scheduled catalyst — the call rests on the futures.", "无已排期的催化事件——判断基于期货走势。")
+      : bi("No scheduled catalyst — the call rests on drift and momentum.", "无已排期的催化事件——判断基于长期漂移与近期动量。")]);
   }
 
   function nextEvent(all, now) {
@@ -193,9 +231,8 @@
     var next = nextEvent(all, now);
     (doc.days || []).forEach(function (d) {
       var ol = el("ol", "mk-events", d.events.map(function (e) { return eventItem(e, now, next && next.id); }));
-      if (!d.events.length) ol.appendChild(el("li", "mk-quiet", [bi("No scheduled catalyst — the call rests on drift and momentum.",
-        "无已排期的催化事件——判断基于长期漂移与近期动量。")]));
-      var day = el("li", "mk-day", [el("div", "mk-day-head", [el("h3", "mk-date", [dayLabel(d.date)]), outlookRow(d.outlook)]), ol]);
+      if (!d.events.length) ol.appendChild(quietNote(d));
+      var day = el("li", "mk-day", [el("div", "mk-day-head", [el("h3", "mk-date", [dayLabel(d.date)]), outlookRow(d.outlook, d)]), preopenLine(d), ol]);
       day.id = "mk-day-" + d.date;
       list.appendChild(day);
     });
@@ -259,11 +296,11 @@
       var c = (calls || {})[i[0]];
       if (!c) return;
       var r = realized && realized[i[0]];
-      var d = DIR[c.direction] || DIR.up;
-      var li = el("li", "dir-" + c.direction + (r ? (r.hit ? " hit" : " miss") : ""), [
+      var d = DIR[c.direction] || DIR.up, none = noLean(c);
+      var li = el("li", (none ? "dir-none" : "dir-" + c.direction) + (r ? (r.hit ? " hit" : " miss") : ""), [
         el("b", null, [bi(i[3], i[4])]),
-        el("i", null, [d[0]]),
-        el("span", null, [pct(c.probability)]),
+        el("i", null, [none ? "–" : d[0]]),
+        el("span", null, [none ? bi("no lean", "无倾向") : pct(c.probability)]),
         r ? el("em", null, [(r.change_pct > 0 ? "+" : "") + r.change_pct.toFixed(2) + "% " + (r.hit ? "✓" : "✗")]) : null
       ]);
       li.title = explain(i, c) + (r ? " Actual: " + (r.change_pct > 0 ? "+" : "") + r.change_pct.toFixed(2) + "%." : "");
@@ -284,10 +321,11 @@
     var now = Date.now(), all = [];
     DOC.days.forEach(function (x) { x.events.forEach(function (e) { all.push(e); }); });
     var next = nextEvent(all, now);
-    box.appendChild(el("div", "mk-day-head", [el("h3", "mk-date", [dayLabel(d)]), outlookRow(day.outlook)]));
+    box.appendChild(el("div", "mk-day-head", [el("h3", "mk-date", [dayLabel(d)]), outlookRow(day.outlook, day)]));
+    var pl = preopenLine(day);
+    if (pl) box.appendChild(pl);
     var ol = el("ol", "mk-events", day.events.map(function (e) { return eventItem(e, now, next && next.id); }));
-    if (!day.events.length) ol.appendChild(el("li", "mk-quiet", [bi("No scheduled catalyst — the call rests on drift and momentum.",
-      "无已排期的催化事件——判断基于长期漂移与近期动量。")]));
+    if (!day.events.length) ol.appendChild(quietNote(day));
     box.appendChild(ol);
   }
 
@@ -307,10 +345,43 @@
       var r = rec[i[0]] || {};
       dl.appendChild(el("dt", null, [bi(i[1], i[2])]));
       dl.appendChild(el("dd", null, [r.n ? r.hits + "/" + r.n + " · " + Math.round(r.hit_rate * 100) + "%" : "–",
-        r.brier != null ? el("small", null, [" Brier " + r.brier.toFixed(3)]) : null]));
+        r.brier != null ? el("small", null, [" Brier " + r.brier.toFixed(3)]) : null,
+        r.lean_n != null && r.lean_n !== r.n ? el("small", "mk-lean-rec", [bi("with a lean: " + r.lean_hits + "/" + r.lean_n,
+          "有倾向时：" + r.lean_hits + "/" + r.lean_n)]) : null]));
     });
     box.appendChild(dl);
-    box.appendChild(el("p", null, [bi("Brier score: 0.25 is a coin flip; lower is better.", "Brier 分数：0.25 相当于抛硬币，越低越好。")]));
+    box.appendChild(el("p", null, [bi("Brier score: 0.25 is a coin flip; lower is better. “No clear lean” calls count in the Brier score but claim no direction.",
+      "Brier 分数：0.25 相当于抛硬币，越低越好。“无明显倾向”的判断计入 Brier 分数，但不计方向。")]));
+  }
+
+  // ── the signal backtest: why the pre-open call deserves more trust than the others ──
+  function backtestBox(doc) {
+    var box = $("mk-cal-backtest"), sig = doc.signals;
+    if (!box) return;
+    box.textContent = "";
+    if (!sig || !sig.indices) { box.hidden = true; return; }
+    box.hidden = false;
+    box.appendChild(el("h3", null, [bi("The pre-open signal, tested", "开盘前信号回测")]));
+    box.appendChild(el("p", null, [bi("How often the close followed the opening move on sessions the model never saw (the last 12 months), against simply leaning up every day:",
+      "在模型从未见过的交易日（最近 12 个月）中，收盘方向与开盘变动一致的比例，对比每天一律看涨：")]));
+    var dl = el("dl", null, []);
+    IDX.forEach(function (i) {
+      var v = sig.indices[i[0]];
+      if (!v) return;
+      dl.appendChild(el("dt", null, [bi(i[1], i[2])]));
+      dl.appendChild(el("dd", null, [Math.round(v.test.hit_rate * 100) + "% ",
+        el("small", null, [bi("vs " + Math.round(v.baseline.hit_rate * 100) + "%", "对比 " + Math.round(v.baseline.hit_rate * 100) + "%")])]));
+    });
+    box.appendChild(dl);
+    var f = IDX.map(function (i) { return (sig.indices[i[0]] || {}).futures; }).filter(function (x) { return x && x.n; });
+    if (f.length) {
+      var n = f[0].n, hit = f.reduce(function (t, x) { return t + x.hit_rate; }, 0) / f.length;
+      box.appendChild(el("p", null, [bi("Read from futures at " + (sig.signal_at_et || "09:20") + " ET, as the desk does live, it was right " +
+        Math.round(hit * 100) + "% of the time over the last " + n + " sessions.",
+        "按实际做法以美东 " + (sig.signal_at_et || "09:20") + " 的期货读数检验最近 " + n + " 个交易日，正确率 " + Math.round(hit * 100) + "%。")]));
+    }
+    box.appendChild(el("p", "mk-bt-note", [bi("Calls days ahead have no such signal and stay near 50%. Refitted every week, and used only while it beats leaning up.",
+      "提前数日的判断没有这类信号，仍接近 50%。每周重新拟合，只有优于一律看涨时才采用。")]));
   }
 
   // ── run panel ──
@@ -405,6 +476,7 @@
       indexTiles(doc.snapshot || {});
       var n = renderTimeline(doc);
       renderCalendar(doc);
+      backtestBox(doc);
       var first = (doc.days || []).filter(function (d) { return d.date >= todayET(); })[0] || (doc.days || [])[0];
       if (first) selectDay(first.date);
       runPanel(doc, n);

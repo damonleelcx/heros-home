@@ -166,7 +166,137 @@ def data(ctx: TaskContext) -> dict:
         return merge(ctx)
     if op == "assemble":
         return assemble(ctx)
+    if op == "preopen":
+        return preopen(ctx)
+    if op == "history":  # calibration: 5 years of daily opens and closes
+        ctx.tool_call()
+        return {"index": ctx.inputs["index"], "rows": ctx.tools.daily_history(INDEX_SYMBOL[ctx.inputs["index"]], "5y")}
+    if op == "futures_bars":  # calibration: 60 days of 5-minute futures, to test the live signal itself
+        ctx.tool_call()
+        bars = ctx.tools.intraday(skills.FUTURES[ctx.inputs["index"]], "60d")["bars"]
+        return {"index": ctx.inputs["index"], "bars": bars}
+    if op == "backtest":
+        return backtest(ctx)
+    if op == "commit_calibration":
+        cal = ctx.deps["backtest"]
+        ctx.store.remember("calibration", "signals", cal)
+        ctx.emit("calibration.committed", fitted_at=cal["fitted_at"])
+        return {"committed": True, "fitted_at": cal["fitted_at"]}
+    if op == "futures":
+        return live_futures(ctx)
+    if op == "afterhours":
+        return after_hours(ctx)
     raise ContractViolation(f"data agent has no op {op}")
+
+
+INDEX_SYMBOL = {"DJI": "^DJI", "IXIC": "^IXIC", "GSPC": "^GSPC"}
+PREOPEN_CUTOFF = "09:30"  # a session's call is locked at its open
+SIGNAL_AT = "09:20"       # when the pre-open update reads the futures (and what the backtest tests)
+
+
+def _now_et(ctx: TaskContext) -> datetime:
+    return skills.now_et(datetime.fromtimestamp(ctx.store.clock(), timezone.utc))
+
+
+def backtest(ctx: TaskContext) -> dict:
+    out = {}
+    for k in skills.INDICES:
+        rows = (ctx.deps.get(f"history.{k}") or {}).get("rows")
+        if not rows:
+            raise ToolError(f"no history for {k}", retryable=False)
+        bt = skills.backtest_gap(rows)
+        bars = (ctx.deps.get(f"futures_bars.{k}") or {}).get("bars")
+        bt["futures"] = skills.futures_check(bars, rows[-90:], bt, SIGNAL_AT) if bars else None
+        out[k] = bt
+    return {"indices": out, "fitted_at": datetime.fromtimestamp(ctx.store.clock(), timezone.utc).isoformat(),
+            "signal_at_et": SIGNAL_AT}
+
+
+def live_futures(ctx: TaskContext) -> dict:
+    day = _now_et(ctx).date().isoformat()
+    moves = {}
+    for k in skills.INDICES:
+        ctx.tool_call()
+        bars = ctx.tools.intraday(skills.FUTURES[k], "5d")["bars"]
+        m = skills.futures_move(bars, day)
+        if m:
+            moves[k] = m | {"symbol": skills.FUTURES[k]}
+    if not moves:
+        raise ToolError("no futures bars for today yet")
+    return {"day": day, "moves": moves}
+
+
+def after_hours(ctx: TaskContext) -> dict:
+    out, missing = {}, []
+    for e in ctx.inputs["events"]:
+        try:
+            ctx.tool_call()
+            m = skills.after_hours_move(ctx.tools.intraday(e["symbol"], "5d", prepost=True)["bars"], e["date"])
+        except (ToolError, ToolDenied) as err:
+            missing.append({"symbol": e["symbol"], "error": str(err)[:200]})
+            continue
+        if m:
+            out[e["id"]] = m | {"symbol": e["symbol"]}
+    return {"moves": out, "missing": missing}
+
+
+def apply_signals(ctx: TaskContext, days: list[dict], snap: dict, fut: dict | None, ah: dict | None) -> None:
+    """Market evidence on top of the event view, then the lock.
+
+    1. After-hours moves of overnight reporters reprice those events' calls (implied index move →
+       the calibrated gap probability, combined with the analyst's view).
+    2. Before 9:30 ET, today's call for the day takes the overnight futures move the same way.
+    3. Any session that has opened shows its locked call, never a recomputed one.
+    """
+    cal = (ctx.store.recall("calibration", "signals") or {}).get("indices") or {}
+    now = _now_et(ctx)
+    today, hm = now.date().isoformat(), now.strftime("%H:%M")
+    log = ctx.store.recall_ns("outlook_log")
+    for d in days:
+        changed = False
+        for e in d["events"]:
+            m = (ah or {}).get(e["id"])
+            if not m or not cal:
+                continue
+            price = m.get("close") or 0
+            implied = skills.implied_index_move(e, m["move_pct"], price, snap)
+            a = e["analysis"] = dict(e["analysis"])
+            imps = dict(a.get("impacts") or {})
+            for k in skills.INDICES:
+                if k in cal and implied.get(k):
+                    p = skills.combine(skills.gap_probability(cal[k], implied[k]), skills.p_up_of(imps.get(k) or {}))
+                    imps[k] = dict(imps.get(k) or {}) | skills.as_call(p)
+            a["impacts"] = imps
+            a["after_hours"] = {"move_pct": m["move_pct"], "at": m["at"], "implied_pct": implied}
+            changed = True
+        if changed:
+            d["outlook"] = skills.day_outlook(d["events"], snap)
+        if d["date"] == today and hm < PREOPEN_CUTOFF and fut and fut.get("day") == today and cal:
+            pre = {}
+            for k, mv in fut["moves"].items():
+                if k not in cal:
+                    continue
+                p_sig = skills.gap_probability(cal[k], mv["move_pct"])
+                d["outlook"][k] = dict(d["outlook"].get(k) or {}) | skills.as_call(
+                    skills.combine(p_sig, skills.p_up_of(d["outlook"].get(k) or {})))
+                pre[k] = {"symbol": mv["symbol"], "move_pct": mv["move_pct"], "at_et": mv["at_et"],
+                          "signal_probability_up": round(p_sig, 3)}
+            if pre:
+                d["preopen"] = pre
+        opened = d["date"] < today or (d["date"] == today and hm >= PREOPEN_CUTOFF)
+        if opened and d["date"] in log:
+            d["outlook"] = log[d["date"]]["calls"]
+            d["locked"] = {"at": log[d["date"]].get("logged_at"), "preopen": log[d["date"]].get("preopen")}
+
+
+def preopen(ctx: TaskContext) -> dict:
+    """The 9:20 ET update: yesterday's assembled timeline, with today's call re-read from futures."""
+    doc = ctx.store.recall("published", "doc")
+    if not doc:
+        raise ToolError("nothing published yet to update", retryable=False)
+    doc = json.loads(json.dumps(doc))
+    apply_signals(ctx, doc["days"], doc.get("snapshot") or {}, ctx.deps.get("collect.futures"), None)
+    return doc
 
 
 def merge(ctx: TaskContext) -> dict:
@@ -228,6 +358,8 @@ def assemble(ctx: TaskContext) -> dict:
         # counts toward Wednesday's call and Wednesday's score.
         days.setdefault(e.get("session_date") or e["date"], []).append(
             {**e, "analysis": a, "review": v or {"ok": True, "issues": []}})
+    day_list = [{"date": d, "events": evs, "outlook": skills.day_outlook(evs, snap)} for d, evs in sorted(days.items())]
+    apply_signals(ctx, day_list, snap, ctx.deps.get("collect.futures"), (ctx.deps.get("collect.afterhours") or {}).get("moves"))
     log = ctx.store.recall_ns("outlook_log")
     history = {k: (snap.get(k) or {}).get("history") or [] for k in skills.INDICES}
     scored, record = skills.score_calls({d: c["calls"] for d, c in log.items()}, history)
@@ -237,13 +369,24 @@ def assemble(ctx: TaskContext) -> dict:
         "window": {"start": ctx.inputs["start"], "end": ctx.inputs["end"]},
         "snapshot": snap,
         "headlines": [h for h in heads if h.get("market_relevant")][:6],
-        "days": [{"date": d, "events": evs, "outlook": skills.day_outlook(evs, snap)} for d, evs in sorted(days.items())],
+        "days": day_list,
+        "signals": _signals_summary(ctx),
         "past": past,
         "track_record": record,
         "sources": merged["sources"],
         "calendar_note": merged["note"],
         "fallbacks": fallbacks,
     }
+
+def _signals_summary(ctx: TaskContext) -> dict | None:
+    """What the page needs to show the backtest: per index, the out-of-sample result and the live check."""
+    cal = ctx.store.recall("calibration", "signals")
+    if not cal:
+        return None
+    return {"fitted_at": cal["fitted_at"], "signal_at_et": cal.get("signal_at_et"),
+            "indices": {k: {"test": v["test"], "baseline": v["baseline"], "futures": v.get("futures"),
+                            "sessions": v["sessions"], "from": v["from"], "to": v["to"]}
+                        for k, v in cal["indices"].items()}}
 
 # ── analyst ─────────────────────────────────────────────────────────────────
 
@@ -488,6 +631,19 @@ def verify(ctx: TaskContext) -> dict:
         if problems:
             raise VerificationFailed(problems)
         return {"ok": True, "events": n, "risks": risks, "needs_human": len(failed) > len(tl["sources"]) // 2}
+    if op == "calibration":
+        bt = ctx.deps["backtest"]["indices"]
+        problems = []
+        for k, v in bt.items():
+            if v["b"] <= 0:
+                problems.append(f"{k}: the gap coefficient is not positive ({v['b']})")
+            if v["test"]["n"] < 200:
+                problems.append(f"{k}: only {v['test']['n']} out-of-sample sessions")
+            if v["test"]["brier"] >= v["baseline"]["brier"]:
+                problems.append(f"{k}: out-of-sample Brier {v['test']['brier']} does not beat the baseline {v['baseline']['brier']}")
+        if problems:
+            raise VerificationFailed(problems)
+        return {"ok": True, "indices": {k: {"hit_rate": v["test"]["hit_rate"], "brier": v["test"]["brier"]} for k, v in bt.items()}}
     raise ContractViolation(f"verifier has no op {op}")
 
 
@@ -505,7 +661,7 @@ def publish(ctx: TaskContext) -> dict:
     body_hash = content_hash({k: v for k, v in tl.items()})
     stats = ctx.mission_stats()
     doc = tl | {
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "generated_at": datetime.fromtimestamp(ctx.store.clock(), timezone.utc).replace(microsecond=0).isoformat(),
         "run": {"mission_id": ctx.task["mission_id"], "content_hash": body_hash[:16], "risks": verification["risks"],
                 "approved_by": ctx.task.get("approved_by") or "policy:auto",
                 **{k: stats[k] for k in ("tasks", "retries", "critic_rejections", "revisions", "recovered",
@@ -522,12 +678,13 @@ def publish(ctx: TaskContext) -> dict:
             ctx.task["mission_id"], ctx.task["id"])
     finally:
         ctx.store.release_lock("publish:market-timeline", ctx.worker)
-    now_et = skills.now_et(datetime.now(timezone.utc))
+    now_et = _now_et(ctx)
     for d in tl["days"]:
         opens = d["date"] > now_et.date().isoformat() or (d["date"] == now_et.date().isoformat() and now_et.strftime("%H:%M") < "09:30")
         if opens:  # a call is frozen once its session opens; later runs cannot rewrite history
             ctx.store.remember("outlook_log", d["date"], {"calls": d["outlook"], "mission_id": ctx.task["mission_id"],
-                                                        "logged_at": now_et.isoformat()})
+                                                        "logged_at": now_et.isoformat(), "preopen": d.get("preopen")})
+    ctx.store.remember("published", "doc", tl)
     ctx.store.remember("published", "market-timeline", {"mission_id": ctx.task["mission_id"], "hash": body_hash,
                                                        "events": [e for d in tl["days"] for e in d["events"]]})
     return {"path": path, "written": ran, "idem_key": idem, "events": verification["events"]}
@@ -549,9 +706,12 @@ CONTRACTS: dict[str, Contract] = {c.role: c for c in [
              "a source is unreachable after 3 attempts (optional: the mission continues without it)"),
     Contract("news_scout", "Collect market-moving headlines", ("headlines",), frozenset({"net.read"}), ("rss_headlines",),
              "the feed list", "deduplicated headlines flagged for market relevance", 60, 5, "every feed fails"),
-    Contract("data", "Market snapshot; merge and rank events; assemble the timeline", ("snapshot", "merge", "assemble"),
-             frozenset({"net.read", "state.read"}), ("index_quote",), "dependency artifacts only",
-             "snapshot | ranked events | timeline document", 90, 8, "no index quotes, or no events at all"),
+    Contract("data", "Market data and signals; merge and rank events; assemble the timeline",
+             ("snapshot", "merge", "assemble", "preopen", "history", "futures_bars", "backtest", "commit_calibration",
+              "futures", "afterhours"),
+             frozenset({"net.read", "state.read"}), ("index_quote", "daily_history", "intraday"), "dependency artifacts only",
+             "snapshot | ranked events | timeline | price history | backtest | futures / after-hours moves", 120, 16,
+             "no index quotes, no events at all, or no futures before the open"),
     Contract("analyst", "Assess possible impact of each event on DJI, IXIC and GSPC", ("analyze",),
              frozenset({"llm.call"}), ("llm_json",), "one batch of events + snapshot + headlines (+ critic feedback)",
              "one analysis per event", 300, 2, "model unavailable → rules baseline; repeated critic rejection → rules + flag",
@@ -559,7 +719,8 @@ CONTRACTS: dict[str, Contract] = {c.role: c for c in [
     Contract("critic", "Reject hallucinated numbers, advice language, malformed or overconfident analyses", ("review",),
              frozenset(), (), "the batch's events and the analyst's artifact", "verdict per event + feedback", 30, 0,
              "never escalates itself; the coordinator replans on its verdicts", _req(("verdicts", "rejected"))),
-    Contract("verifier", "Check event set and final timeline against the schema and invariants", ("events", "timeline"),
+    Contract("verifier", "Check the event set, the timeline and every calibration against invariants",
+             ("events", "timeline", "calibration"),
              frozenset(), (), "merge or assemble artifact", "pass + risk flags, or a hard failure", 30, 0,
              "any invariant fails → no publish, escalate to a human"),
     Contract("publisher", "Publish the verified timeline, exactly once per content", ("publish",),
