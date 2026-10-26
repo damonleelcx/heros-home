@@ -27,6 +27,8 @@ TAG=$(git rev-parse --short HEAD)
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 REG="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com"
 TMP=$(mktemp -d); chmod 700 "$TMP"; trap 'rm -rf "$TMP"' EXIT
+# file:// URL the aws CLI can open; Git Bash on Windows runs the Windows aws.exe, which needs C:/… paths.
+furl() { if command -v cygpath >/dev/null 2>&1; then echo "file://$(cygpath -m "$1")"; else echo "file://$1"; fi; }
 
 # ── image ──
 aws ecr describe-repositories --repository-names "$REPO" >/dev/null 2>&1 \
@@ -47,7 +49,7 @@ if [ "$DRY" != "--dry-run" ]; then
   "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
   "Resource": "arn:aws:secretsmanager:$REGION:$ACCOUNT:secret:market/*"}]}
 JSON
-  aws iam put-role-policy --role-name "$NODE_ROLE" --policy-name MarketSecretsRead --policy-document "file://$TMP/policy.json"
+  aws iam put-role-policy --role-name "$NODE_ROLE" --policy-name MarketSecretsRead --policy-document "$(furl "$TMP/policy.json")"
 
   # ── market/prod: keep the database password once made; take the Qwen key from the local .ENV ──
   sed -n 's/^\(export \)\{0,1\}QWEN_LLM_API_KEY_V2=//p' "$LLM_ENV_FILE" 2>/dev/null | head -1 | tr -d '\r' > "$TMP/llm" || true
@@ -73,10 +75,10 @@ print("market/prod: " + ("db-password kept" if "db-password" in cur else "db-pas
 PY
   if [ "$EXISTS" = 0 ]; then
     aws secretsmanager create-secret --name "$SECRET" --description "Market desk (heros-home/market)" \
-      --secret-string "file://$TMP/next" >/dev/null
+      --secret-string "$(furl "$TMP/next")" >/dev/null
     echo "created $SECRET"
   elif [ "$(cat "$TMP/changed")" = 1 ]; then
-    aws secretsmanager put-secret-value --secret-id "$SECRET" --secret-string "file://$TMP/next" >/dev/null
+    aws secretsmanager put-secret-value --secret-id "$SECRET" --secret-string "$(furl "$TMP/next")" >/dev/null
     echo "updated $SECRET"
   fi
   rm -f "$TMP/llm" "$TMP/current" "$TMP/next"
