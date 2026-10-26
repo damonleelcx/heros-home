@@ -94,12 +94,18 @@
     var chip = el("span", "mk-chip dir-" + (c.direction || "up") + (c.magnitude ? " mag-" + c.magnitude : ""), [
       el("i", null, [d[0]]),
       el("b", null, [bi(i[3], i[4])]),
-      el("span", "mk-p", [bi(d[1] + " " + pct(c.probability), d[2] + " " + pct(c.probability))]),
-      c.magnitude ? el("span", "mk-mag", [bi("· " + (MAG[c.magnitude] || MAG.low)[0] + " impact", "· 影响" + (MAG[c.magnitude] || MAG.low)[1])]) : null,
+      el("span", "mk-p", [bi(pct(c.probability) + " chance " + d[1], d[2] + "的概率 " + pct(c.probability))]),
+      c.magnitude ? el("span", "mk-mag", [bi("· " + (MAG[c.magnitude] || MAG.low)[0] + " impact", "· " + (MAG[c.magnitude] || MAG.low)[1] + "影响")]) : null,
       extra || null
     ]);
-    chip.title = i[1] + ": " + d[1] + " with " + pct(c.probability) + " probability";
+    chip.title = explain(i, c);
     return chip;
+  }
+  // "Dow: 54% chance it closes higher than the previous close (46% lower)."
+  function explain(i, c) {
+    var p = Math.round((Number(c.probability) || 0.5) * 100), up = c.direction !== "down";
+    return i[1] + ": " + p + "% chance it closes " + (up ? "higher" : "lower") + " than the previous close (" +
+      (100 - p) + "% " + (up ? "lower" : "higher") + ")." + (c.magnitude ? " Impact " + c.magnitude + ": how much this kind of event usually moves it." : "");
   }
   function impactChips(a) {
     var row = el("div", "mk-chips", []);
@@ -107,7 +113,7 @@
     return row;
   }
   function outlookRow(o, cls) {
-    var row = el("div", "mk-outlook" + (cls ? " " + cls : ""), [el("span", "mk-outlook-l", [bi("Session call", "当日判断")])]);
+    var row = el("div", "mk-outlook" + (cls ? " " + cls : ""), [el("span", "mk-outlook-l", [bi("Call for the day", "当日判断")])]);
     IDX.forEach(function (i) { row.appendChild(callChip(i, (o || {})[i[0]])); });
     return row;
   }
@@ -243,12 +249,14 @@
       if (!c) return;
       var r = realized && realized[i[0]];
       var d = DIR[c.direction] || DIR.up;
-      ul.appendChild(el("li", "dir-" + c.direction + (r ? (r.hit ? " hit" : " miss") : ""), [
+      var li = el("li", "dir-" + c.direction + (r ? (r.hit ? " hit" : " miss") : ""), [
         el("b", null, [bi(i[3], i[4])]),
         el("i", null, [d[0]]),
         el("span", null, [pct(c.probability)]),
         r ? el("em", null, [(r.change_pct > 0 ? "+" : "") + r.change_pct.toFixed(2) + "% " + (r.hit ? "✓" : "✗")]) : null
-      ]));
+      ]);
+      li.title = explain(i, c) + (r ? " Actual: " + (r.change_pct > 0 ? "+" : "") + r.change_pct.toFixed(2) + "%." : "");
+      ul.appendChild(li);
     });
     return ul;
   }
@@ -367,6 +375,13 @@
   Array.prototype.forEach.call(root.querySelectorAll("[data-mk-view]"), function (b) {
     b.addEventListener("click", function () { setView(b.getAttribute("data-mk-view")); });
   });
+  var key = $("mk-key");
+  if (key) {
+    try { if (localStorage.getItem("mk-key") === "closed") key.open = false; } catch (e) {}
+    key.addEventListener("toggle", function () {
+      try { localStorage.setItem("mk-key", key.open ? "open" : "closed"); } catch (e) {}
+    });
+  }
   var saved = null;
   try { saved = localStorage.getItem("mk-view"); } catch (e) {}
   setView(saved === "calendar" ? "calendar" : "timeline");

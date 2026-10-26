@@ -128,6 +128,22 @@
   <div class="mk-indices" id="mk-indices" aria-live="polite"></div>
   <div class="mk-board">
     <div class="mk-main">
+      <details class="mk-key" id="mk-key" open>
+        <summary><span lang="en">How to read a call</span><span lang="zh">如何看懂涨跌判断</span></summary>
+        <div class="mk-key-body">
+          <div class="mk-key-row">
+            <span class="mk-chip dir-up mag-medium" aria-hidden="true"><i>▲</i><b><span lang="en">Dow</span><span lang="zh">道指</span></b><span class="mk-p"><span lang="en">54% chance up</span><span lang="zh">涨的概率 54%</span></span></span>
+            <p><span lang="en">The desk thinks there is a <b>54% chance the Dow closes higher</b> that day than the day before — and a 46% chance it closes lower. It is a probability, not the size of the move.</span><span lang="zh">市场观察认为道指当天收盘<b>高于前一天收盘的概率为 54%</b>，收低的概率为 46%。这是概率，不是涨跌幅。</span></p>
+          </div>
+          <ul>
+            <li><span lang="en"><b>50%</b> is a coin flip. The further from 50%, the stronger the call. Before a release most calls sit between 50% and 60%.</span><span lang="zh"><b>50%</b> 相当于抛硬币，离 50% 越远判断越强。数据公布前，多数判断在 50%–60% 之间。</span></li>
+            <li><span lang="en"><b>▲ up / ▼ down</b> is the more likely direction for that index.</span><span lang="zh"><b>▲ 涨 / ▼ 跌</b>是该指数更可能的方向。</span></li>
+            <li><span lang="en"><b>Low / medium / high impact</b> is how much this kind of event usually moves that index.</span><span lang="zh"><b>低 / 中 / 高影响</b>表示这类事件通常对该指数影响多大。</span></li>
+            <li><span lang="en"><b>Call for the day</b> combines all of that day’s events into one call per index.</span><span lang="zh"><b>当日判断</b>把当天所有事件合并成每个指数一个判断。</span></li>
+            <li><span lang="en">Every day’s call is locked before the open and checked against the close: see the calendar’s ✓ / ✗ and the track record.</span><span lang="zh">每天的判断在开盘前锁定、收盘后核对：见日历中的 ✓ / ✗ 与历史命中。</span></li>
+          </ul>
+        </div>
+      </details>
       <div class="mk-views" role="group" aria-label="View">
         <button type="button" data-mk-view="timeline" aria-pressed="true"><span lang="en">Timeline</span><span lang="zh">时间线</span></button>
         <button type="button" data-mk-view="calendar" aria-pressed="false"><span lang="en">Calendar</span><span lang="zh">日历</span></button>
@@ -145,7 +161,7 @@
       </div>
       <div id="mk-view-calendar" hidden>
         <div class="mk-cal-grid" id="mk-cal-grid"></div>
-        <p class="mk-cal-legend"><span lang="en">▲ up / ▼ down, with the probability the call is right. Past sessions show the close and ✓ / ✗. Pick a day for its events.</span><span lang="zh">▲ 涨 / ▼ 跌，百分比为判断正确的概率。已过交易日显示收盘涨跌与 ✓ / ✗。点选日期查看当日事件。</span></p>
+        <p class="mk-cal-legend"><span lang="en">Each day shows the chance each index closes up ▲ or down ▼ that day (50% = coin flip). Past days show the actual close and ✓ / ✗. Pick a day for its events.</span><span lang="zh">每天显示各指数当天收涨 ▲ 或收跌 ▼ 的概率（50% 即抛硬币）。已过的交易日显示实际涨跌与 ✓ / ✗。点选日期查看当日事件。</span></p>
         <div class="mk-cal-bottom">
           <div class="mk-cal-detail" id="mk-cal-detail"></div>
           <aside class="mk-cal-record" id="mk-cal-record"></aside>
