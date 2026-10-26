@@ -102,7 +102,7 @@ the tools its contract grants. The mission state is global and only the coordina
 | `earnings_calendar(day)` | net.read | no | api.nasdaq.com | market-cap floor (200 B USD) |
 | `rss_headlines(feed)` | net.read | no | CNBC, MarketWatch | named feeds only; https links only |
 | `index_quote(symbol)` | net.read | no | Yahoo chart API (query1 → query2) | `^SYMBOL` pattern; 429-aware |
-| `llm_json(system, user)` | llm.call | no (costs money) | DashScope OpenAI-compatible (`qwen-plus`) | mission budget: calls, tokens, USD; key from env or `E:\repos\.ENV` |
+| `llm_json(system, user)` | llm.call | no (uses plan quota) | Qwen Token Plan, OpenAI-compatible (`qwen3.7-plus`) | mission budget: calls, tokens, USD; key from env or `E:\repos\.ENV` |
 | `publish_file(name, doc)` | fs.publish | **yes** | local volume | name pattern; atomic rename; idempotency key; publish lock |
 
 Every call checks the contract's permissions and the host allowlist **before** a socket opens, and is
@@ -122,7 +122,7 @@ recorded in `usage` (latency, tokens, cost, success).
 | `day_outlook` | data | combines a day's event calls, weighted by exposure, sub-linear in the count |
 | `score_calls` | data | hit rate and Brier score per index against realised closes |
 | `rules_impact` | analyst fallback | bilingual summary, scenarios and what to watch |
-| `advice_language`, `numbers_in` | critic, verifier | refuses advice wording; flags numbers that appear nowhere in the inputs |
+| `advice_language`, `unsupported_numbers` | critic, verifier | refuses advice wording; flags numbers whose value (allowing sign, rounding and K/M/万/亿 units) appears nowhere in the inputs |
 
 ## 6. The task graph
 

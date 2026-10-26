@@ -63,14 +63,15 @@ class Config:
         "DESK_UA",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36",
     )
-    # OpenAI-compatible chat endpoint (DashScope / Qwen by default).
-    llm_base_url: str = _env("DESK_LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    llm_model: str = _env("DESK_LLM_MODEL", "qwen-plus")
+    # OpenAI-compatible chat endpoint: the Qwen Token Plan by default (its keys start with sk-sp-).
+    llm_base_url: str = _env("DESK_LLM_BASE_URL", "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1")
+    llm_model: str = _env("DESK_LLM_MODEL", "qwen3.7-plus")
     llm_key_name: str = _env("DESK_LLM_KEY_NAME", "QWEN_LLM_API_KEY_V2")
     llm_env_file: str = _env("DESK_ENV_FILE", str(ROOT.parent / ".ENV"))
-    # Price per 1M tokens, used only for the budget guard and the run report.
-    llm_usd_per_mtok_in: float = float(_env("DESK_LLM_USD_IN", "0.4"))
-    llm_usd_per_mtok_out: float = float(_env("DESK_LLM_USD_OUT", "1.2"))
+    # Price per 1M tokens, for the budget guard and the run report. The Token Plan is prepaid, so the
+    # defaults are 0 and the call and token limits do the guarding; set these for a metered endpoint.
+    llm_usd_per_mtok_in: float = float(_env("DESK_LLM_USD_IN", "0"))
+    llm_usd_per_mtok_out: float = float(_env("DESK_LLM_USD_OUT", "0"))
     limits: Limits = field(default_factory=Limits)
 
     def llm_key(self) -> str | None:
@@ -85,6 +86,7 @@ ALLOWED_HOSTS = frozenset({
     "query2.finance.yahoo.com",
     "www.cnbc.com",
     "feeds.content.dowjones.io",
+    "token-plan.maas.qianwenaiapi.com",
     "dashscope.aliyuncs.com",
     "dashscope-intl.aliyuncs.com",
 })

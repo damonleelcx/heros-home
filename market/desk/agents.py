@@ -406,7 +406,7 @@ def critic(ctx: TaskContext) -> dict:
         if skills.advice_language(blob):
             issues.append("investment-advice language: " + ", ".join(sorted(set(skills.advice_language(blob)))))
         known = json.dumps(_brief(e)) + snap_text + head_text
-        invented = sorted(n for n in skills.numbers_in(blob) if n.replace(" ", "") not in known.replace(" ", ""))
+        invented = skills.unsupported_numbers(blob, known)
         if invented:
             issues.append("numbers not found in the inputs: " + ", ".join(invented[:6]))
         rubric = skills.index_sensitivity(e)
@@ -545,7 +545,7 @@ CONTRACTS: dict[str, Contract] = {c.role: c for c in [
              "snapshot | ranked events | timeline document", 90, 8, "no index quotes, or no events at all"),
     Contract("analyst", "Assess possible impact of each event on DJI, IXIC and GSPC", ("analyze",),
              frozenset({"llm.call"}), ("llm_json",), "one batch of events + snapshot + headlines (+ critic feedback)",
-             "one analysis per event", 180, 2, "model unavailable → rules baseline; repeated critic rejection → rules + flag",
+             "one analysis per event", 300, 2, "model unavailable → rules baseline; repeated critic rejection → rules + flag",
              _req(("analyses",))),
     Contract("critic", "Reject hallucinated numbers, advice language, malformed or overconfident analyses", ("review",),
              frozenset(), (), "the batch's events and the analyst's artifact", "verdict per event + feedback", 30, 0,

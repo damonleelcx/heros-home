@@ -266,7 +266,7 @@ class Toolbox:
         raise last
 
     # llm.call
-    def llm_json(self, system: str, user: str, max_tokens: int = 3000) -> dict:
+    def llm_json(self, system: str, user: str, max_tokens: int = 12000) -> dict:  # reasoning models think first
         self._guard("llm_json")
         call = self._llm or self._openai_compatible
         t0 = time.monotonic()
@@ -298,7 +298,7 @@ class Toolbox:
         req = urllib.request.Request(url, data=body, method="POST", headers={
             "Authorization": f"Bearer {key}", "Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=120) as r:
+            with urllib.request.urlopen(req, timeout=200) as r:
                 data = json.loads(r.read())
         except urllib.error.HTTPError as e:
             detail = e.read(400).decode("utf-8", "replace")

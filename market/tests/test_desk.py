@@ -124,7 +124,7 @@ class EndToEnd(Base):
         for e in all_events(doc):
             self.assertEqual(e["analysis"]["method"], "llm")
             self.assertNotIn("you should", json.dumps(e["analysis"]))
-        self.assertGreater(rep["llm"]["cost_usd"], 0)
+        self.assertGreater(rep["llm"]["llm_tokens"], 0)
 
     def test_persistent_hallucination_falls_back_to_rules_and_is_kept_as_an_eval_case(self):
         def llm(system, user, max_tokens):
@@ -444,6 +444,8 @@ class Skills(unittest.TestCase):
         self.assertTrue(skills.advice_language("You should buy now"))
         self.assertFalse(skills.advice_language("Markets may rise if inflation cools"))
         self.assertIn("7.5%", skills.numbers_in("could jump 7.5% this week"))
+        known = json.dumps({"change_pct": -1.23, "price": 52215.16, "consensus": "0.3%"})
+        self.assertEqual(skills.unsupported_numbers("Down 1.23% to 52,215; CPI 0.3%; a 7.5% jump", known), ["7.5%"])
 
     def test_classifier(self):
         self.assertEqual(skills.classify_release("Core PCE Price Index")[0], "PCE inflation")

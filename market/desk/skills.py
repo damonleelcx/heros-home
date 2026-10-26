@@ -497,7 +497,45 @@ def advice_language(text: str) -> list[str]:
     return [m.group(0) for m in ADVICE.finditer(text or "")]
 
 
+SCALE = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12, "万": 1e4, "亿": 1e8}
+_NUM = r"\d+(?:,\d{3})*(?:\.\d+)?"
+
+
+def _values(tok: str) -> list[tuple[float, int]]:
+    """'68.4万' → [(68.4, 1), (684000.0, 0)]: as written, and scaled by its unit when it has one."""
+    m = re.match(rf"({_NUM})\s?([KMBT万亿])?", tok)
+    if not m:
+        return []
+    num = m.group(1).replace(",", "")
+    dp = len(num.split(".")[1]) if "." in num else 0
+    v = float(num)
+    out = [(v, dp)]
+    if m.group(2):
+        out.append((v * SCALE[m.group(2)], 0))
+    return out
+
+
+def unsupported_numbers(text: str, known: str) -> list[str]:
+    """Numbers in `text` whose value appears nowhere in `known`.
+
+    Compared by value, not spelling: sign, unit and rounding may differ ('-1.23' in the data is
+    '1.23%' in prose; 684K may be written 68.4万). A number the inputs do not contain is invented,
+    however plausible it looks.
+    """
+    pool: set[float] = set()
+    for m in re.finditer(rf"({_NUM})\s?([KMBT万亿])?", known or ""):
+        for v, _ in _values(m.group(0)):
+            pool.add(abs(v))
+    out = []
+    for tok in sorted(numbers_in(text)):
+        vals = _values(tok)
+        if vals and not any(abs(round(k, dp) - v) < 1e-9 or abs(k - v) <= max(1.0, abs(v) * 0.005) and dp == 0 and v >= 1000
+                            for v, dp in vals for k in pool):
+            out.append(tok.strip())
+    return out
+
+
 def numbers_in(text: str) -> set[str]:
     """Numbers with a unit or decimal (e.g. 3.1%, 198K, 4.25) — the kind a model can invent."""
-    return {m.group(0).rstrip(".") for m in re.finditer(r"\d+(?:[.,]\d+)?\s?(?:%|bp|K|M|B|T)?", text or "")
-            if any(c in m.group(0) for c in ".%KMBTb") or len(m.group(0)) >= 3}
+    return {m.group(0).rstrip(".").strip() for m in re.finditer(r"\d+(?:[.,]\d+)*\s?(?:%|bp|K|M|B|T|万|亿)?", text or "")
+            if any(c in m.group(0) for c in ".%KMBTb万亿") or len(m.group(0).strip()) >= 3}

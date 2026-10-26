@@ -12,14 +12,16 @@ python -m desk run                 # one refresh: coordinator + 4 worker threads
 python -m http.server 8088 -d ../site
 ```
 
-The analyst calls Qwen through DashScope's OpenAI-compatible API. It reads `QWEN_LLM_API_KEY_V2` from
+The analyst calls `qwen3.7-plus` through the Qwen Token Plan's OpenAI-compatible API (a reasoning model:
+about 200 s and ~75K tokens per refresh). It reads `QWEN_LLM_API_KEY_V2` from
 the environment, or from the dotenv file named by `DESK_ENV_FILE` (default: `../../.ENV`, i.e.
 `E:\repos\.ENV`). Without a working key it uses the rules baseline and says so on the page.
 
 | Variable | Default |
 |---|---|
-| `DESK_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
-| `DESK_LLM_MODEL` | `qwen-plus` |
+| `DESK_LLM_BASE_URL` | `https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1` |
+| `DESK_LLM_MODEL` | `qwen3.7-plus` (the plan also lists `qwen3.7-max`, `qwen3.6-flash`, `deepseek-v4-pro`) |
+| `DESK_LLM_USD_IN` / `DESK_LLM_USD_OUT` | `0` (prepaid plan; set per-1M-token prices for a metered endpoint) |
 | `DESK_WINDOW_DAYS` | `14` |
 | `DESK_DB` / `DESK_PUBLISH_DIR` | `market/var/desk.sqlite3` / `site/data/market` |
 
