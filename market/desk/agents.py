@@ -194,6 +194,10 @@ def merge(ctx: TaskContext) -> dict:
         events += skills.normalize_macro(real, rows)
     events = [e for e in events if start <= date.fromisoformat(e["date"]) <= end]
     ranked = skills.dedupe_rank(events, ctx.cfg.max_events)
+    for e in ranked:
+        e["session_date"] = skills.session_for(e)
+    # Within a session, last night's after-close reports come before the day's own releases.
+    ranked.sort(key=lambda e: (e["session_date"], e["date"], e.get("time_et") or "99:99"))
     return {"events": ranked, "sources": sources, "calendar_offset": offset, "note": offset_note,
             "dropped": len(events) - len(ranked)}
 
@@ -220,7 +224,10 @@ def assemble(ctx: TaskContext) -> dict:
         if a is None or (v and not v["ok"]):
             a = skills.rules_impact(e, snap) | {"note": "critic rejected the model analysis" if v and not v["ok"] else "no analysis"}
             fallbacks += 1
-        days.setdefault(e["date"], []).append({**e, "analysis": a, "review": v or {"ok": True, "issues": []}})
+        # Grouped by the session that trades on the event, so a report after Tuesday's close
+        # counts toward Wednesday's call and Wednesday's score.
+        days.setdefault(e.get("session_date") or e["date"], []).append(
+            {**e, "analysis": a, "review": v or {"ok": True, "issues": []}})
     log = ctx.store.recall_ns("outlook_log")
     history = {k: (snap.get(k) or {}).get("history") or [] for k in skills.INDICES}
     scored, record = skills.score_calls({d: c["calls"] for d, c in log.items()}, history)
@@ -243,8 +250,10 @@ def assemble(ctx: TaskContext) -> dict:
 ANALYST_SYSTEM = """You are the market analyst on a desk that publishes an upcoming-events timeline with
 directional calls for the Dow Jones Industrial Average (DJI), Nasdaq Composite (IXIC) and S&P 500 (GSPC).
 
-For each event, predict whether each index will close HIGHER ("up") or LOWER ("down") on the session the
-event lands in, versus the prior close, and give the probability that your call is right.
+For each event, predict whether each index will close HIGHER ("up") or LOWER ("down") on the event's
+session_date versus the prior close, and give the probability that your call is right. session_date is the
+first session that trades on the event: the next trading day for anything released after the 4:00 PM ET
+close, such as most big earnings reports.
 Rules:
 - Use only facts in the input: event figures (consensus, prior, actual when already released), the market
   snapshot (levels, recent closes, VIX, 10-year yield), the listed headlines, and the baseline call supplied
@@ -269,7 +278,7 @@ LEVELS = {"low", "medium", "high"}
 
 
 def _brief(e: dict) -> dict:
-    keep = ("id", "kind", "category", "tier", "date", "time_et", "title", "figures", "detail", "symbol",
+    keep = ("id", "kind", "category", "tier", "date", "session_date", "time_et", "title", "figures", "detail", "symbol",
             "session", "in_dow", "nasdaq_heavy", "actual_vs_consensus")
     return {k: e[k] for k in keep if k in e}
 

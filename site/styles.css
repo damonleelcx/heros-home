@@ -582,3 +582,4 @@ button.mk-cal-cell:focus-visible { outline: 2px solid var(--lime); outline-offse
 .mk-key-row .mk-chip { flex: none; }
 .mk-key b { color: var(--paper); }
 .mk-key ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+.mk-top .mk-overnight { color: #8fb4ff; border-color: color-mix(in srgb, #8fb4ff 50%, transparent); }
