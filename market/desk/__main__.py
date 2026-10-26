@@ -54,6 +54,19 @@ def drive(store: Store, cfg: Config, mid: str, workers: int, timeout_s: float, *
     return q.mission(mid)
 
 
+def open_store(target: str, wait_s: float = 120) -> Store:
+    """In k8s the database may still be starting when the desk does: retry for a while."""
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            return Store(target)
+        except Exception as e:  # psycopg.OperationalError, without importing psycopg for SQLite users
+            if "postgres" not in target or time.monotonic() > deadline:
+                raise
+            print(f"database not ready ({type(e).__name__}); retrying", file=sys.stderr)
+            time.sleep(3)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="desk")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -89,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     cfg = Config()
-    store = Store(cfg.db_path)
+    store = open_store(cfg.db_path)
     q = TaskQueue(store, cfg.limits)
     coord = Coordinator(store, cfg)
 

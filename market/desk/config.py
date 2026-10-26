@@ -52,7 +52,8 @@ class Limits:
 
 @dataclass(frozen=True)
 class Config:
-    db_path: Path = Path(_env("DESK_DB", str(ROOT / "market" / "var" / "desk.sqlite3")))
+    # A SQLite path, or a PostgreSQL DSN (postgresql://user:pass@host/db) — the k8s deployment uses Postgres.
+    db_path: str = _env("DESK_DB", str(ROOT / "market" / "var" / "desk.sqlite3"))
     publish_dir: Path = Path(_env("DESK_PUBLISH_DIR", str(ROOT / "site" / "data" / "market")))
     window_days: int = int(_env("DESK_WINDOW_DAYS", "14"))
     batch_size: int = int(_env("DESK_BATCH_SIZE", "6"))

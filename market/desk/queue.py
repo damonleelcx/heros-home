@@ -180,7 +180,7 @@ class TaskQueue:
         """Lease one ready task. Atomic: the row is selected and updated in one write transaction."""
         now = self.s.clock()
         with self.s.tx() as c:
-            leased = c.execute("SELECT COUNT(*) FROM tasks WHERE status='leased'").fetchone()[0]
+            leased = c.execute("SELECT COUNT(*) n FROM tasks WHERE status='leased'").fetchone()["n"]
             if leased >= self.limits.max_parallel:
                 return None
             sql = ("SELECT t.id FROM tasks t JOIN missions m ON m.id=t.mission_id WHERE t.status='ready' "
@@ -284,9 +284,9 @@ class TaskQueue:
                             "AND reason=? AND status='open'", (mid, task_id, reason)).fetchone()
             if row:
                 return row["id"]
-            cur = c.execute("INSERT INTO escalations (mission_id, task_id, reason, severity, status, created_at) "
-                            "VALUES (?,?,?,?,?,?)", (mid, task_id, reason, severity, "open", self.s.clock()))
-            eid = cur.lastrowid
+            eid = c.execute("INSERT INTO escalations (mission_id, task_id, reason, severity, status, created_at) "
+                            "VALUES (?,?,?,?,?,?) RETURNING id", (mid, task_id, reason, severity, "open", self.s.clock())
+                            ).fetchone()["id"]
         self.s.emit("coordinator", "escalation.opened", mid, task_id, id=eid, reason=reason, severity=severity)
         return eid
 

@@ -6,6 +6,7 @@ economic calendar files each day's rows under the NEXT day's date and prints tim
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -104,9 +105,26 @@ def no_llm(**_):
     raise ToolError("no LLM key (test)", retryable=False)
 
 
+TABLES = ("missions", "tasks", "events", "artifacts", "checkpoints", "side_effects", "locks", "escalations",
+          "timers", "knowledge", "usage")
+
+
+def _db(tmp: Path) -> str:
+    """SQLite by default; DESK_TEST_PG=postgresql://… runs the same evaluations on Postgres, each
+    test starting from empty tables."""
+    dsn = os.environ.get("DESK_TEST_PG")
+    if not dsn:
+        return str(tmp / "desk.sqlite3")
+    import psycopg
+    with psycopg.connect(dsn, autocommit=True) as c:
+        for t in TABLES:
+            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
+    return dsn
+
+
 def env(limits: Limits | None = None, window_days: int = 12):
     tmp = Path(tempfile.mkdtemp(prefix="desk-test-"))
-    cfg = Config(db_path=tmp / "desk.sqlite3", publish_dir=tmp / "pub", window_days=window_days, batch_size=4,
+    cfg = Config(db_path=_db(tmp), publish_dir=tmp / "pub", window_days=window_days, batch_size=4,
                  llm_env_file=str(tmp / "none.env"), limits=limits or Limits(lease_s=30))
     clock = Clock()
     store = Store(cfg.db_path, clock=clock)

@@ -24,7 +24,7 @@ Tools (tools.py)                       permissioned, host-allowlisted, recorded
   ↓
 Verification (critic + verifier)       independent of the agent that did the work
   ↓
-Persistent state + artifacts (store.py, one SQLite file)
+Persistent state + artifacts (store.py: PostgreSQL in k8s, a SQLite file locally)
   ↓
 Replan / continue / complete; publish; schedule wake-ups
 ```
@@ -102,7 +102,7 @@ the tools its contract grants. The mission state is global and only the coordina
 | `earnings_calendar(day)` | net.read | no | api.nasdaq.com | market-cap floor (200 B USD) |
 | `rss_headlines(feed)` | net.read | no | CNBC, MarketWatch | named feeds only; https links only |
 | `index_quote(symbol)` | net.read | no | Yahoo chart API (query1 → query2) | `^SYMBOL` pattern; 429-aware |
-| `llm_json(system, user)` | llm.call | no (uses plan quota) | Qwen Token Plan, OpenAI-compatible (`qwen3.7-plus`) | mission budget: calls, tokens, USD; key from env or `E:\repos\.ENV` |
+| `llm_json(system, user)` | llm.call | no (uses plan quota) | Qwen Token Plan, OpenAI-compatible (`qwen3.7-plus`) | mission budget: calls, tokens, USD; key from Secrets Manager `market/prod` in k8s, env or `E:\repos\.ENV` locally |
 | `publish_file(name, doc)` | fs.publish | **yes** | local volume | name pattern; atomic rename; idempotency key; publish lock |
 
 Every call checks the contract's permissions and the host allowlist **before** a socket opens, and is
@@ -138,7 +138,7 @@ collect.headlines ─(soft)                                                     
 * The analysis layer does not exist at plan time: the coordinator adds it when `merge` reports how many events there are (dynamic fan-out), and adds revisions when the critic rejects. Every addition is checked for cycles and budget.
 * Task states: `pending → ready → leased → succeeded`; `leased → ready` (retry with backoff 2ⁿ s) `→ dead`; `ready → awaiting_approval → ready`; `pending → skipped` when a hard dependency died.
 
-## 7. Durable state (one SQLite file, WAL)
+## 7. Durable state (PostgreSQL in k8s, SQLite locally — same SQL)
 
 | Table | Holds |
 |---|---|
@@ -163,7 +163,7 @@ Memory layers: **mission state** (missions/tasks) · **working memory** (checkpo
 |---|---|
 | Durable execution, resume after crash | every transition is a committed row; `Coordinator.step()` keeps no state between steps; test `test_coordinator_and_store_restart_mid_mission_resume_without_duplicates` |
 | Idempotent tasks | `add_tasks` no-ops on existing keys; timers → missions by idempotency key; publish by `side_effect_once`; tests `test_timer_fired_twice…`, `test_publish_retry_writes_once` |
-| Workers and queues | `Worker.run_one` leases from SQLite under `BEGIN IMMEDIATE`; any number of workers / pods |
+| Workers and queues | `Worker.run_one` leases inside one serialised write transaction (Postgres advisory lock / SQLite `BEGIN IMMEDIATE`); any number of workers / pods |
 | Leases, ownership, no conflicts | lease + heartbeat; commits fenced by lease owner; publish lock; tests `test_stale_worker_cannot_overwrite…`, `test_concurrent_workers_never_claim_the_same_task` |
 | Checkpoints | snapshot per symbol; analyst answer saved before commit; test `test_analyst_crash_after_model_answer_does_not_pay_twice` |
 | Verification agents, critic loop | critic per batch + verifier on events and on the timeline; revision with feedback, then baseline fallback |
@@ -184,4 +184,4 @@ Memory layers: **mission state** (missions/tasks) · **working memory** (checkpo
 * The baseline predictor has a small edge at best. Equities rise on slightly more than half of sessions, so it leans "up" unless an event argues otherwise. The track record will show whether it, or the model, beats a coin flip; treat both as commentary.
 * Market holidays are not modelled; a holiday shows as a session with a call and no score.
 * Nasdaq's quirks (day shift, fixed UTC-4 times) are detected or encoded, and the verifier checks the claims-on-Thursday invariant; a further layout change fails loudly rather than silently.
-* One SQLite file means one node. Several nodes need Postgres behind the same `Store` interface.
+* The database is PostgreSQL and reached over the network, but the published `timeline.json` sits on a node-local volume shared by the workers and `desk-web`; several nodes need an RWX volume or serving the file from the database.

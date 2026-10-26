@@ -325,5 +325,6 @@ class Toolbox:
         fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-", suffix=".json")
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=1)
+        os.chmod(tmp, 0o644)  # mkstemp makes it 0600; the web server runs as another user
         os.replace(tmp, target)
         return str(target)

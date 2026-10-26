@@ -62,7 +62,7 @@ def metrics(s: Store) -> dict:
     humans = s.q("SELECT COUNT(*) n FROM events WHERE type IN ('task.approved','escalation.resolved')")[0]["n"]
     u = s.q("SELECT kind, COUNT(*) n, SUM(ok) ok, SUM(cost) cost, AVG(latency_ms) lat FROM usage GROUP BY kind")
     by_role = {r["role"]: {"n": r["n"], "ok": r["ok"]} for r in s.q(
-        "SELECT role, COUNT(*) n, SUM(status='succeeded') ok FROM tasks GROUP BY role")}
+        "SELECT role, COUNT(*) n, SUM(CASE WHEN status='succeeded' THEN 1 ELSE 0 END) ok FROM tasks GROUP BY role")}
     return {
         "missions": dict(ms),
         "mission_completion_rate": round(ms["succeeded"] / done, 3) if done else None,
@@ -70,7 +70,7 @@ def metrics(s: Store) -> dict:
         "tasks": dict(ts),
         "lease_recoveries": reclaimed,
         "recovery_rate": round(recovered / reclaimed, 3) if reclaimed else None,
-        "retries": s.q("SELECT COALESCE(SUM(MAX(attempts-1,0)),0) n FROM tasks")[0]["n"],
+        "retries": s.q("SELECT COALESCE(SUM(CASE WHEN attempts>1 THEN attempts-1 ELSE 0 END),0) n FROM tasks")[0]["n"],
         "human_interventions": humans,
         "open_escalations": s.q("SELECT COUNT(*) n FROM escalations WHERE status='open'")[0]["n"],
         "agent_utilisation": by_role,

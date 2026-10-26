@@ -1,6 +1,6 @@
 """Durable shared state. Every meaningful transition is a row; nothing lives only in memory.
 
-One SQLite file (WAL) holds the mission state, the task graph and its queue, the append-only
+One database — a SQLite file (WAL) locally, PostgreSQL in k8s — holds the mission state, the task graph and its queue, the append-only
 event log agents communicate through, immutable artifacts, per-task checkpoints, idempotency
 records for side effects, locks, escalations, timers, long-term knowledge and usage accounting.
 
@@ -83,43 +83,119 @@ def content_hash(v: Any) -> str:
     return hashlib.sha256(dumps(v).encode()).hexdigest()
 
 
+class _PgConn:
+    """psycopg connection that speaks the store's dialect: `?` placeholders, rows by column name.
+
+    It runs in autocommit, and tx() issues BEGIN/COMMIT itself. Every write transaction first takes
+    one transaction-scoped advisory lock, which serialises writers exactly as SQLite's BEGIN
+    IMMEDIATE does, so a claim (select-then-update) can never hand one task to two workers.
+    """
+
+    def __init__(self, dsn: str):
+        import psycopg
+        from psycopg.rows import dict_row
+        self._c = psycopg.connect(dsn, autocommit=True, row_factory=dict_row)
+        self.in_transaction = False
+
+    def execute(self, sql: str, args=()):
+        return self._c.execute(sql.replace("?", "%s"), tuple(args))
+
+    def executescript(self, script: str) -> None:
+        for stmt in filter(None, (s.strip() for s in script.split(";"))):
+            self._c.execute(stmt)
+
+    def begin(self) -> None:
+        self._c.execute("BEGIN")
+        self._c.execute("SELECT pg_advisory_xact_lock(7061)")
+        self.in_transaction = True
+
+    def end(self, ok: bool) -> None:
+        self.in_transaction = False
+        self._c.execute("COMMIT" if ok else "ROLLBACK")
+
+    def close(self) -> None:
+        self._c.close()
+
+
+class _SqliteConn:
+    def __init__(self, path: str):
+        c = sqlite3.connect(path, timeout=30, isolation_level=None, check_same_thread=False)
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA synchronous=NORMAL")
+        c.execute("PRAGMA busy_timeout=30000")
+        self._c = c
+
+    @property
+    def in_transaction(self) -> bool:
+        return self._c.in_transaction
+
+    def execute(self, sql: str, args=()):
+        return self._c.execute(sql, tuple(args))
+
+    def executescript(self, script: str) -> None:
+        self._c.executescript(script)
+
+    def begin(self) -> None:
+        self._c.execute("BEGIN IMMEDIATE")
+
+    def end(self, ok: bool) -> None:
+        self._c.execute("COMMIT" if ok else "ROLLBACK")
+
+    def close(self) -> None:
+        self._c.close()
+
+
+def is_postgres(target: str) -> bool:
+    return target.startswith(("postgres://", "postgresql://"))
+
+
+def pg_schema() -> str:
+    # REAL is 4-byte in Postgres: epoch seconds need DOUBLE PRECISION.
+    return (SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+                  .replace(" REAL", " DOUBLE PRECISION"))
+
+
 class Store:
-    def __init__(self, path: str | Path, clock=time.time):
-        self.path = str(path)
-        if self.path != ":memory:":
+    """SQLite file (local runs, tests) or PostgreSQL DSN (k8s). Same SQL, same semantics."""
+
+    def __init__(self, target: str | Path, clock=time.time):
+        self.path = str(target)
+        self.postgres = is_postgres(self.path)
+        if not self.postgres and self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.clock = clock
         self._local = threading.local()
-        self._conn().executescript(SCHEMA)  # executescript commits on its own; keep it outside tx()
+        if self.postgres:  # several pods may start at once: create the schema under the writer lock
+            with self.tx() as c:
+                c.executescript(pg_schema())
+        else:  # sqlite's executescript commits on its own; keep it outside tx()
+            self._conn().executescript(SCHEMA)
 
     # ── connections and transactions ──
-    def _conn(self) -> sqlite3.Connection:
+    def _conn(self):
         c = getattr(self._local, "conn", None)
         if c is None:
-            c = sqlite3.connect(self.path, timeout=30, isolation_level=None, check_same_thread=False)
-            c.row_factory = sqlite3.Row
-            c.execute("PRAGMA journal_mode=WAL")
-            c.execute("PRAGMA synchronous=NORMAL")
-            c.execute("PRAGMA busy_timeout=30000")
+            c = _PgConn(self.path) if self.postgres else _SqliteConn(self.path)
             self._local.conn = c
         return c
 
     @contextmanager
-    def tx(self) -> Iterator[sqlite3.Connection]:
-        """BEGIN IMMEDIATE: writers serialise, so a claim or a transition is all-or-nothing."""
+    def tx(self):
+        """One serialised write transaction: a claim or a transition is all-or-nothing."""
         c = self._conn()
         if c.in_transaction:  # nested use joins the outer transaction
             yield c
             return
-        c.execute("BEGIN IMMEDIATE")
+        c.begin()
         try:
             yield c
-            c.execute("COMMIT")
+            c.end(True)
         except BaseException:
-            c.execute("ROLLBACK")
+            c.end(False)
             raise
 
-    def q(self, sql: str, *args) -> list[sqlite3.Row]:
+    def q(self, sql: str, *args) -> list:
         return self._conn().execute(sql, args).fetchall()
 
     def close(self) -> None:
@@ -143,8 +219,8 @@ class Store:
     def put_artifact(self, kind: str, body: Any, mission_id: str | None = None, task_id: str | None = None) -> str:
         aid = f"{kind}:{content_hash(body)[:24]}"
         with self.tx() as c:
-            c.execute("INSERT OR IGNORE INTO artifacts (id, mission_id, task_id, kind, created_at, body) "
-                      "VALUES (?,?,?,?,?,?)", (aid, mission_id, task_id, kind, self.clock(), dumps(body)))
+            c.execute("INSERT INTO artifacts (id, mission_id, task_id, kind, created_at, body) "
+                      "VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING", (aid, mission_id, task_id, kind, self.clock(), dumps(body)))
         return aid
 
     def get_artifact(self, aid: str) -> Any:
@@ -175,8 +251,8 @@ class Store:
             return json.loads(rows[0]["result"]), False
         result = fn()
         with self.tx() as c:
-            c.execute("INSERT OR IGNORE INTO side_effects (idem_key, mission_id, task_id, kind, result, ts) "
-                      "VALUES (?,?,?,?,?,?)", (idem_key, mission_id, task_id, kind, dumps(result), self.clock()))
+            c.execute("INSERT INTO side_effects (idem_key, mission_id, task_id, kind, result, ts) "
+                      "VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING", (idem_key, mission_id, task_id, kind, dumps(result), self.clock()))
         return result, True
 
     # ── locks / leases on shared resources ──

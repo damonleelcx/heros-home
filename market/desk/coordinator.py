@@ -191,7 +191,7 @@ class Coordinator:
     # ── scheduling and wake-ups ──
     def add_timer(self, timer_id: str, due_at: float, kind: str, payload: dict) -> bool:
         with self.s.tx() as c:
-            cur = c.execute("INSERT OR IGNORE INTO timers (id, due_at, kind, payload, status) VALUES (?,?,?,?,?)",
+            cur = c.execute("INSERT INTO timers (id, due_at, kind, payload, status) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
                             (timer_id, due_at, kind, json.dumps(payload), "pending"))
             return cur.rowcount == 1
 
