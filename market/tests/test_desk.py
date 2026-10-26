@@ -405,6 +405,31 @@ class Predictions(Base):
             self.assertTrue(all(c["probability"] <= 0.66 for c in e["analysis"]["impacts"].values()))
 
 
+class Sessions(Base):
+    def test_after_close_reports_count_toward_the_next_session(self):
+        mid, m = self.run_mission()
+        doc = timeline(self.cfg)
+        by_day = {d["date"]: d["events"] for d in doc["days"]}
+        def where(title):
+            return next(d for d, evs in by_day.items() for e in evs if e["title"] == title)
+        # Microsoft reports after Wednesday's close: Thursday's session trades on it.
+        self.assertEqual(where("Microsoft Corporation (MSFT) earnings"), "2026-10-29")
+        msft = next(e for e in by_day["2026-10-29"] if e["symbol"] == "MSFT" if e.get("symbol"))
+        self.assertEqual((msft["date"], msft["session_date"]), ("2026-10-28", "2026-10-29"))
+        # Amazon after Thursday's close → Friday; the FOMC at 2 PM stays on Wednesday.
+        self.assertEqual(where("Amazon.com, Inc. (AMZN) earnings"), "2026-10-30")
+        self.assertEqual(where("FOMC rate decision"), "2026-10-28")
+        # Overnight reports come first in the session they land in.
+        self.assertEqual(by_day["2026-10-29"][0]["symbol"], "MSFT")
+
+    def test_session_for(self):
+        self.assertEqual(skills.session_for({"date": "2026-10-28", "session": "after close", "time_et": "16:05"}), "2026-10-29")
+        self.assertEqual(skills.session_for({"date": "2026-10-30", "session": "after close"}), "2026-11-02")  # Fri → Mon
+        self.assertEqual(skills.session_for({"date": "2026-10-28", "session": "pre-market", "time_et": "07:00"}), "2026-10-28")
+        self.assertEqual(skills.session_for({"date": "2026-10-28", "time_et": "14:00"}), "2026-10-28")
+        self.assertEqual(skills.session_for({"date": "2026-10-31", "time_et": "10:00"}), "2026-11-02")    # Saturday
+
+
 class Skills(unittest.TestCase):
     def test_predictor_reads_the_surprise_once_the_figure_is_out(self):
         cpi = {"id": "x", "kind": "macro", "category": "inflation", "tier": 1, "title": "CPI inflation",

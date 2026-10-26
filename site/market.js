@@ -50,7 +50,17 @@
     return bi(d.toLocaleDateString("en-US", o), d.toLocaleDateString("zh-CN", short ? { month: "long", day: "numeric", timeZone: "UTC" }
       : { month: "long", day: "numeric", weekday: "short", timeZone: "UTC" }));
   }
+  function overnight(e) { return !!(e.session_date && e.session_date !== e.date); }
+  function shortDay(s, loc) {
+    return new Date(s + "T12:00:00Z").toLocaleDateString(loc, { weekday: "short", timeZone: "UTC" });
+  }
   function timeLabel(e) {
+    // Reported after the previous session's close: it trades at this session's open.
+    if (overnight(e)) {
+      return e.session === "after close" || (e.time_et || "") >= "16:00"
+        ? bi("After " + shortDay(e.date, "en-US") + "’s close", shortDay(e.date, "zh-CN") + "盘后")
+        : bi(shortDay(e.date, "en-US") + " (market closed)", shortDay(e.date, "zh-CN") + "（休市）");
+    }
     if (e.kind === "earnings") {
       var s = { "pre-market": ["Before open", "盘前"], "after close": ["After close", "盘后"] }[e.session];
       return s ? bi(s[0], s[1]) : bi("Time n/a", "时间未定");
@@ -141,6 +151,7 @@
       el("span", "mk-cat cat-" + e.category, [bi(c[0], c[1])]),
       el("span", "mk-tier tier-" + e.tier, [bi(tier[0], tier[1])]),
       e.id === nextId ? el("span", "mk-next", [bi("Next up", "即将发生")]) : null,
+      overnight(e) ? el("span", "mk-overnight", [bi("Trades at this open", "本日开盘反映")]) : null,
       past ? el("span", "mk-past", [bi("Released", "已公布")]) : null
     ]);
     var details = el("details", "mk-more", [

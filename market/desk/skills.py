@@ -70,6 +70,21 @@ def trading_days(start: date, n: int) -> list[date]:
         d += timedelta(days=1)
     return out
 
+def session_for(e: dict) -> str:
+    """The trading session that first trades on an event.
+
+    Releases before the 4:00 PM ET close land in that day's session; anything after the close (most
+    big earnings) or on a weekend is first traded at the next session's open. Exchange holidays are
+    not modelled yet.
+    """
+    d = date.fromisoformat(e["date"])
+    after_close = e.get("session") == "after close" or (e.get("time_et") or "00:00") >= "16:00"
+    if after_close:
+        d += timedelta(days=1)
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d.isoformat()
+
 # ── release taxonomy ────────────────────────────────────────────────────────
 
 # (pattern, family, category, tier, rate_sensitive). Sub-rows of one release (m/m, y/y, core,
