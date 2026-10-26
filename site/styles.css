@@ -571,3 +571,14 @@ button.mk-cal-cell:focus-visible { outline: 2px solid var(--lime); outline-offse
   .mk-cal-detail .mk-ev { grid-template-columns: 14px minmax(0, 1fr); }
   .mk-outlook-l { flex-basis: 100%; }
 }
+
+/* market watch: the how-to-read key */
+.mk-key { border: 1px solid color-mix(in srgb, var(--lime) 35%, var(--line)); border-radius: 14px; margin-bottom: 16px; background: #14140f; }
+.mk-key summary { cursor: pointer; padding: 12px 16px; font-weight: 700; font-size: 14px; color: var(--lime); }
+.mk-key summary:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.mk-key-body { padding: 0 16px 14px; font-size: 13.5px; color: #d6d4cb; }
+.mk-key-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+.mk-key-row p { margin: 0; flex: 1 1 280px; }
+.mk-key-row .mk-chip { flex: none; }
+.mk-key b { color: var(--paper); }
+.mk-key ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
