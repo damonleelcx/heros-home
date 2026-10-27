@@ -126,6 +126,10 @@ Every agent is built and run independently. Sponsor them on
 [Patreon](https://patreon.com/damonleelcx) or Afdian (爱发电), or write to
 [support@heros-agent.space](mailto:support@heros-agent.space).
 
+## License
+
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+
 ---
 
 Agents are AI. They do not replace licensed professionals or official decisions. Games use play money only.
