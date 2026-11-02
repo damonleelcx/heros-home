@@ -1,7 +1,7 @@
 # Running and deploying heros-agent.space
 
-The landing page is static HTML/CSS in `site/` (English / 中文 toggle), served by unprivileged nginx.
-Market watch reads `/data/market/timeline.json`, which the market desk in [`market/`](../market/README.md)
+The landing page and the Market watch page (`site/markets/`) are static HTML/CSS (English / 中文 toggle),
+served by unprivileged nginx. Market watch reads `/data/market/timeline.json`, which the market desk in [`market/`](../market/README.md)
 publishes.
 
 ## Run locally

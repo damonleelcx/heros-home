@@ -1,6 +1,6 @@
 # Market desk — design
 
-The home page's **Market watch** section shows the coming two weeks of market-moving events for the
+The **Market watch** page (`/markets/`) shows the coming two weeks of market-moving events for the
 Dow Jones (DJI), Nasdaq Composite (IXIC) and S&P 500 (GSPC). Each event gets an **up/down call per
 index, with a probability**, and each trading day gets a combined session call. Calls are frozen at
 the open and **scored against the close**, so the page shows its own track record.

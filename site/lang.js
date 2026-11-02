@@ -1,4 +1,6 @@
 (function () {
+  // Market watch moved to its own page; keep links to the old section working.
+  if (location.hash === "#markets") { location.replace("/markets/"); return; }
   var root = document.documentElement;
   function set(l) {
     root.dataset.lang = l;
