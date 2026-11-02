@@ -1,6 +1,6 @@
 # Market desk
 
-The multi-agent system behind the home page's **Market watch**: upcoming market-moving events with an
+The multi-agent system behind the **Market watch** page (`/markets/`): upcoming market-moving events with an
 up/down call and a probability for the Dow, Nasdaq and S&P 500, each call scored against the close.
 Python 3.11+. The standard library is enough locally (SQLite); PostgreSQL needs `psycopg[binary]`.
 Product overview: [the repository README](../README.md#market-watch). Design: [DESIGN.md](DESIGN.md).

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market watch — Heros Agents</title>
+<meta name="description" content="Upcoming market-moving events with a call on the Dow, Nasdaq and S&amp;P 500: the chance each closes up or down, scored against the close. Not investment advice.">
+<meta property="og:title" content="Market watch — Heros Agents">
+<meta property="og:description" content="Upcoming market-moving events with a call on the Dow, Nasdaq and S&amp;P 500: the chance each closes up or down, scored against the close. Not investment advice.">
+<meta property="og:image" content="https://heros-agent.space/img/og-3.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Heros, 阿桥, FORGE, Vera and Aoi, full length, side by side">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0b0a">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="frame">
+
+<header class="nav">
+  <a class="brand" href="/" aria-label="Heros Agents home">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M16 3v26M3 16h26M6.8 6.8l18.4 18.4M25.2 6.8 6.8 25.2"/></g></svg>
+  </a>
+  <nav class="links" aria-label="Sections">
+    <a href="/markets/" aria-current="page"><span lang="en">Markets</span><span lang="zh">市场观察</span></a>
+    <a href="/#agents"><span lang="en">Agents</span><span lang="zh">智能体</span></a>
+    <a href="/#how"><span lang="en">How they work</span><span lang="zh">工作方式</span></a>
+    <a href="/#principles"><span lang="en">Principles</span><span lang="zh">原则</span></a>
+  </nav>
+  <div class="nav-end">
+    <button class="lang" type="button" id="lang" aria-label="Switch language / 切换语言"><span lang="en">中文</span><span lang="zh">EN</span></button>
+    <a class="pill-grey" href="/#agents"><span lang="en">Meet them</span><span lang="zh">认识她们</span></a>
+  </div>
+</header>
+
+<main>
+
+<section class="markets is-loading" id="markets" aria-labelledby="markets-h">
+  <div class="section-head">
+    <span class="eyebrow"><span lang="en">Market watch · calls for the next two weeks</span><span lang="zh">市场观察 · 未来两周涨跌判断</span></span>
+    <h1 id="markets-h"><span lang="en">What moves the Dow, Nasdaq<br>and S&amp;P 500 next — and which way</span><span lang="zh">下一步撼动道指、纳指和标普的事件<br>以及涨跌方向</span></h1>
+  </div>
+  <div class="mk-indices" id="mk-indices" aria-live="polite"></div>
+  <div class="mk-board">
+    <div class="mk-main">
+      <details class="mk-key" id="mk-key" open>
+        <summary><span lang="en">How to read a call</span><span lang="zh">如何看懂涨跌判断</span></summary>
+        <div class="mk-key-body">
+          <div class="mk-key-row">
+            <span class="mk-chip dir-up mag-medium" aria-hidden="true"><i>▲</i><b><span lang="en">Dow</span><span lang="zh">道指</span></b><span class="mk-p"><span lang="en">54% chance up</span><span lang="zh">涨的概率 54%</span></span></span>
+            <p><span lang="en">The desk thinks there is a <b>54% chance the Dow closes higher</b> that day than the day before — and a 46% chance it closes lower. It is a probability, not the size of the move.</span><span lang="zh">市场观察认为道指当天收盘<b>高于前一天收盘的概率为 54%</b>，收低的概率为 46%。这是概率，不是涨跌幅。</span></p>
+          </div>
+          <ul>
+            <li><span lang="en"><b>50%</b> is a coin flip. The further from 50%, the stronger the call. Before a release most calls sit between 50% and 60%.</span><span lang="zh"><b>50%</b> 相当于抛硬币，离 50% 越远判断越强。数据公布前，多数判断在 50%–60% 之间。</span></li>
+            <li><span lang="en"><b>▲ up / ▼ down</b> is the more likely direction for that index. <b>– No clear lean</b> means 48–52%: no real edge either way.</span><span lang="zh"><b>▲ 涨 / ▼ 跌</b>是该指数更可能的方向。<b>– 无明显倾向</b>表示 48%–52%，两边都没有真正的优势。</span></li>
+            <li><span lang="en"><b>Before the open</b> (about 9:20 AM ET) the call for that day is re-read from index futures — the strongest guide there is to the day’s close, tested in the calendar view — and then <b>locked at 9:30</b>. Days further ahead have no such signal, so most of their calls sit near 50%.</span><span lang="zh"><b>开盘前</b>（美东约上午 9:20）会根据股指期货重新判断当天走势——这是收盘方向最有力的指引，回测见日历视图——然后在 <b>9:30 锁定</b>。更远的日期没有这类信号，所以大多接近 50%。</span></li>
+            <li><span lang="en"><b>Low / medium / high impact</b> is how much this kind of event usually moves that index.</span><span lang="zh"><b>低 / 中 / 高影响</b>表示这类事件通常对该指数影响多大。</span></li>
+            <li><span lang="en"><b>Call for the day</b> combines all of that day’s events into one call per index. A report after the 4 PM ET close counts toward the <b>next</b> trading day, when the market first trades on it.</span><span lang="zh"><b>当日判断</b>把当天所有事件合并成每个指数一个判断。美东下午 4 点收盘后发布的财报计入<b>下一个</b>交易日，因为市场在那时才首次反映。</span></li>
+            <li><span lang="en">Every day’s call is locked before the open and checked against the close: see the calendar’s ✓ / ✗ and the track record.</span><span lang="zh">每天的判断在开盘前锁定、收盘后核对：见日历中的 ✓ / ✗ 与历史命中。</span></li>
+          </ul>
+        </div>
+      </details>
+      <div class="mk-views" role="group" aria-label="View">
+        <button type="button" data-mk-view="timeline" aria-pressed="true"><span lang="en">Timeline</span><span lang="zh">时间线</span></button>
+        <button type="button" data-mk-view="calendar" aria-pressed="false"><span lang="en">Calendar</span><span lang="zh">日历</span></button>
+      </div>
+      <div id="mk-view-timeline">
+        <div class="mk-filters" role="toolbar" aria-label="Filter events">
+          <button type="button" data-mk-cat="all" aria-pressed="true"><span lang="en">All</span><span lang="zh">全部</span></button>
+          <button type="button" data-mk-cat="macro" aria-pressed="false"><span lang="en">Fed &amp; macro</span><span lang="zh">美联储与宏观</span></button>
+          <button type="button" data-mk-cat="earnings" aria-pressed="false"><span lang="en">Earnings</span><span lang="zh">财报</span></button>
+          <button type="button" id="mk-high" class="mk-toggle" aria-pressed="false"><span lang="en">High impact only</span><span lang="zh">只看高影响</span></button>
+        </div>
+        <ol class="mk-timeline" id="mk-timeline">
+          <li class="mk-empty"><span lang="en">Loading the desk’s latest run…</span><span lang="zh">正在载入最新结果…</span></li>
+        </ol>
+      </div>
+      <div id="mk-view-calendar" hidden>
+        <div class="mk-cal-grid" id="mk-cal-grid"></div>
+        <p class="mk-cal-legend"><span lang="en">Each day shows the chance each index closes up ▲ or down ▼ that day (50% = coin flip). Past days show the actual close and ✓ / ✗. Pick a day for its events.</span><span lang="zh">每天显示各指数当天收涨 ▲ 或收跌 ▼ 的概率（50% 即抛硬币）。已过的交易日显示实际涨跌与 ✓ / ✗。点选日期查看当日事件。</span></p>
+        <div class="mk-cal-bottom">
+          <div class="mk-cal-detail" id="mk-cal-detail"></div>
+          <div class="mk-cal-side">
+            <aside class="mk-cal-record" id="mk-cal-record"></aside>
+            <aside class="mk-cal-record" id="mk-cal-backtest" hidden></aside>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="mk-run" id="mk-run" aria-label="How this timeline was made"></aside>
+  </div>
+  <p class="mk-disclaimer"><span lang="en">AI-generated market commentary for information only — not investment advice. Each up/down call carries the probability it is right; before a release that edge is small, and every call is scored against the close so you can judge it yourself.</span><span lang="zh">AI 生成的市场评论，仅供参考，不构成投资建议。每个涨跌判断都附有正确概率；数据公布前优势很小，所有判断都会以收盘结果评分，供你自行判断。</span></p>
+</section>
+
+</main>
+
+<footer class="foot">
+  <span>© 2026 heros-agent.space</span>
+  <span><span lang="en">Agents are AI. They do not replace licensed professionals or official decisions. Games use play money only.</span><span lang="zh">以上均为 AI 智能体，不替代持证专业人士或官方决定。游戏只用游戏筹码。</span></span>
+  <a href="mailto:support@heros-agent.space">support@heros-agent.space</a>
+</footer>
+</div>
+<script src="/lang.js" defer></script>
+<script src="/market.js" defer></script>
+</body>
+</html>
