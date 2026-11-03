@@ -1,10 +1,10 @@
-"""Render site/img/og-N.jpg, the link-preview card: the six agents.
+"""Render site/img/og-N.jpg, the link-preview card: the six agents, full length.
 
 Reads each agent's full figure from its own repository, checked out beside this one
 (../heros-agent, ../Opportunity-Bridge-Agent, ...). Windows fonts (Georgia, Segoe UI,
 Microsoft YaHei for 阿桥).
 
-    python scripts/make-og.py site/img/og-5.jpg
+    python scripts/make-og.py site/img/og-6.jpg
 
 JPEG, not webp: several link-preview crawlers still drop webp. A new filename on every
 change, because crawlers cache the image by URL far longer than the site's own headers say.
@@ -25,7 +25,7 @@ CAST = [
     ("FORGE", "J.A.R.V.I.S.-agent/internal/httpapi/assets/portrait/figure.png", (243, 238, 225)),
     ("Vera", "Law-Med-agent/web/public/vera/vera-full.webp", (226, 236, 246)),
     ("Aoi", "play-with-agents/web/public/play/aoi/aoi-full.webp", (4, 11, 34)),
-    ("Suki", "ai-social-network/mobile/assets/suki/portrait.png", (32, 28, 44)),
+    ("Suki", "ai-social-network/docs/assets/suki-full.png", (16, 22, 40)),
 ]
 
 W, H = 1200, 630
@@ -45,11 +45,9 @@ def rounded(size, radius):
 
 # Cut-outs whose canvas has wide empty margins: sized by the figure itself.
 TRIM = {"Aoi"}
-# Close-ups whose face sits off centre: where to centre the crop, 0 to 1 across the image.
-FOCUS = {"Suki": 0.38}
 
 
-def card(path, bg, w, h, trim=False, focus=0.5):
+def card(path, bg, w, h, trim=False):
     fig = Image.open(path).convert("RGBA")
     opaque = fig.getpixel((2, 2))[3] == 255
     if trim and not opaque:
@@ -59,7 +57,7 @@ def card(path, bg, w, h, trim=False, focus=0.5):
     fh = h if opaque else int(h * 0.94)
     fig = fig.resize((round(fig.width * fh / fig.height), fh), Image.LANCZOS)
     c = Image.new("RGBA", (w, h), bg + (255,))
-    c.paste(fig, (round(w / 2 - fig.width * focus), h - fh), fig)
+    c.alpha_composite(fig, ((w - fig.width) // 2, h - fh))
     return c
 
 
@@ -81,7 +79,7 @@ def main(out):
     label_zh = ImageFont.truetype(os.path.join(FONTS, "msyhbd.ttc"), 19)
     for i, (name, rel, bg) in enumerate(CAST):
         x = M + i * (cw + GAP)
-        c = card(os.path.join(AGENTS, rel), bg, cw, ch, name in TRIM, FOCUS.get(name, 0.5))
+        c = card(os.path.join(AGENTS, rel), bg, cw, ch, name in TRIM)
         img.paste(c.convert("RGB"), (x, TOP), rounded((cw, ch), 16))
         f = label_zh if any(ord(ch_) > 0x2E80 for ch_ in name) else label
         tw = d.textlength(name, font=f)
@@ -93,4 +91,4 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-4.jpg"))
+    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-5.jpg"))
