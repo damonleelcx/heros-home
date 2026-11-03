@@ -1,8 +1,8 @@
 """Render site/img/og-N.jpg, the link-preview card: the six agents, full length.
 
-Reads each agent's full figure from its own repository, checked out beside this one
-(../heros-agent, ../Opportunity-Bridge-Agent, ...). Windows fonts (Georgia, Segoe UI,
-Microsoft YaHei for 阿桥).
+The first five come straight from og-3.jpg, trimmed at the sides to make room. Suki's figure
+is read from her own repository, checked out beside this one. Windows fonts (Georgia,
+Segoe UI, Microsoft YaHei for 阿桥).
 
     python scripts/make-og.py site/img/og-6.jpg
 
@@ -18,15 +18,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 AGENTS = os.path.normpath(os.path.join(HERE, "..", ".."))
 FONTS = r"C:\Windows\Fonts"
 
+# The cards already on og-3.jpg, left to right.
+BASE = ["Heros", "阿桥", "FORGE", "Vera", "Aoi"]
+BASE_IMAGE = os.path.join(HERE, "..", "site", "img", "og-3.jpg")
+BASE_CARD = 216  # card width on og-3.jpg
 # name, figure (relative to the agents directory), card colour behind the figure
-CAST = [
-    ("Heros", "heros-agent/web/static/heros-figure.jpg", (189, 185, 184)),
-    ("阿桥", "Opportunity-Bridge-Agent/web/static/mascot-full.png", (254, 254, 253)),
-    ("FORGE", "J.A.R.V.I.S.-agent/internal/httpapi/assets/portrait/figure.png", (243, 238, 225)),
-    ("Vera", "Law-Med-agent/web/public/vera/vera-full.webp", (226, 236, 246)),
-    ("Aoi", "play-with-agents/web/public/play/aoi/aoi-full.webp", (4, 11, 34)),
-    ("Suki", "ai-social-network/docs/assets/suki-full.png", (16, 22, 40)),
-]
+SUKI = ("Suki", "ai-social-network/docs/assets/suki-full.png", (16, 22, 40))
 
 W, H = 1200, 630
 INK, PAPER, LIME, SUN = (11, 11, 10), (243, 241, 234), (221, 232, 106), (239, 227, 95)
@@ -43,21 +40,11 @@ def rounded(size, radius):
     return mask
 
 
-# Cut-outs whose canvas has wide empty margins: sized by the figure itself.
-TRIM = {"Aoi"}
-
-
-def card(path, bg, w, h, trim=False):
-    fig = Image.open(path).convert("RGBA")
-    opaque = fig.getpixel((2, 2))[3] == 255
-    if trim and not opaque:
-        fig = fig.crop(fig.getchannel("A").getbbox())
-    # Opaque figures fill the card's height so their own background reaches the edges;
-    # cut-outs get a little headroom.
-    fh = h if opaque else int(h * 0.94)
-    fig = fig.resize((round(fig.width * fh / fig.height), fh), Image.LANCZOS)
-    c = Image.new("RGBA", (w, h), bg + (255,))
-    c.alpha_composite(fig, ((w - fig.width) // 2, h - fh))
+def figure(path, bg, w, h):
+    fig = Image.open(path).convert("RGB")
+    fig = fig.resize((round(fig.width * h / fig.height), h), Image.LANCZOS)
+    c = Image.new("RGB", (w, h), bg)
+    c.paste(fig, ((w - fig.width) // 2, 0))
     return c
 
 
@@ -73,14 +60,24 @@ def main(out):
     d.text((W - M, 44), "Six agents. One honest bench.", font=font("georgiai.ttf", 26), fill=LIME, anchor="rm")
     d.text((W - M, 76), "heros-agent.space", font=font("segoeui.ttf", 19), fill=(169, 167, 157), anchor="rm")
 
-    cw = (W - 2 * M - GAP * (len(CAST) - 1)) // len(CAST)
+    names = BASE + [SUKI[0]]
+    cw = (W - 2 * M - GAP * (len(names) - 1)) // len(names)
     ch = H - TOP - M
+    base = Image.open(BASE_IMAGE).convert("RGB")
     label = font("seguisb.ttf", 20)
     label_zh = ImageFont.truetype(os.path.join(FONTS, "msyhbd.ttc"), 19)
-    for i, (name, rel, bg) in enumerate(CAST):
+    trim = (BASE_CARD - cw) // 2
+    for i, name in enumerate(names):
         x = M + i * (cw + GAP)
-        c = card(os.path.join(AGENTS, rel), bg, cw, ch, name in TRIM)
-        img.paste(c.convert("RGB"), (x, TOP), rounded((cw, ch), 16))
+        if name in BASE:
+            bx = M + i * (BASE_CARD + GAP) + trim
+            c = base.crop((bx, TOP, bx + cw, TOP + ch))
+            # The trim cuts into the old label: cover what is left of it with the card's
+            # own edge from just above. The new label below covers the rest.
+            c.paste(c.crop((0, ch - 84, 30, ch - 46)), (0, ch - 46))
+        else:
+            c = figure(os.path.join(AGENTS, SUKI[1]), SUKI[2], cw, ch)
+        img.paste(c, (x, TOP), rounded((cw, ch), 16))
         f = label_zh if any(ord(ch_) > 0x2E80 for ch_ in name) else label
         tw = d.textlength(name, font=f)
         d.rounded_rectangle((x + 10, TOP + ch - 44, x + 10 + tw + 26, TOP + ch - 12), 16, fill=SUN)
@@ -91,4 +88,4 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-5.jpg"))
+    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-6.jpg"))
