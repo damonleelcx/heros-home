@@ -4,7 +4,7 @@ The first five come straight from og-3.jpg, trimmed at the sides to make room. S
 is read from her own repository, checked out beside this one. Windows fonts (Georgia,
 Segoe UI, Microsoft YaHei for 阿桥).
 
-    python scripts/make-og.py site/img/og-6.jpg
+    python scripts/make-og.py site/img/og-7.jpg
 
 JPEG, not webp: several link-preview crawlers still drop webp. A new filename on every
 change, because crawlers cache the image by URL far longer than the site's own headers say.
@@ -23,7 +23,7 @@ BASE = ["Heros", "阿桥", "FORGE", "Vera", "Aoi"]
 BASE_IMAGE = os.path.join(HERE, "..", "site", "img", "og-3.jpg")
 BASE_CARD = 216  # card width on og-3.jpg
 # name, figure (relative to the agents directory), card colour behind the figure
-SUKI = ("Suki", "ai-social-network/docs/assets/suki-full.png", (16, 22, 40))
+SUKI = ("Suki", "ai-social-network/docs/assets/suki-full.png", (178, 175, 208))
 
 W, H = 1200, 630
 INK, PAPER, LIME, SUN = (11, 11, 10), (243, 241, 234), (221, 232, 106), (239, 227, 95)
@@ -88,4 +88,4 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-6.jpg"))
+    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-7.jpg"))
