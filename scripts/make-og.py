@@ -1,10 +1,10 @@
 """Render site/img/og-N.jpg, the link-preview card: the six agents, full length.
 
-The first five come straight from og-base.jpg, trimmed at the sides to make room. Suki's figure
-is read from her own repository, checked out beside this one. Windows fonts (Georgia,
+Heros, 阿桥, FORGE and Vera come straight from og-base.jpg, trimmed at the sides to make room.
+Aoi's figure is scripts/aoi-full.jpg. Suki's is read from her own repository, checked out beside this one. Windows fonts (Georgia,
 Segoe UI, Microsoft YaHei for 阿桥).
 
-    python scripts/make-og.py site/img/og-7.jpg
+    python scripts/make-og.py site/img/og-8.jpg
 
 JPEG, not webp: several link-preview crawlers still drop webp. A new filename on every
 change, because crawlers cache the image by URL far longer than the site's own headers say.
@@ -23,6 +23,7 @@ BASE = ["Heros", "阿桥", "FORGE", "Vera", "Aoi"]
 BASE_IMAGE = os.path.join(HERE, "og-base.jpg")
 BASE_CARD = 216  # card width on og-base.jpg
 # name, figure (relative to the agents directory), card colour behind the figure
+AOI = ("Aoi", os.path.join(HERE, "aoi-full.jpg"), (22, 36, 62))
 SUKI = ("Suki", "ai-social-network/docs/assets/suki-full.png", (178, 175, 208))
 
 W, H = 1200, 630
@@ -69,7 +70,9 @@ def main(out):
     trim = (BASE_CARD - cw) // 2
     for i, name in enumerate(names):
         x = M + i * (cw + GAP)
-        if name in BASE:
+        if name == AOI[0]:
+            c = figure(AOI[1], AOI[2], cw, ch)
+        elif name in BASE:
             bx = M + i * (BASE_CARD + GAP) + trim
             c = base.crop((bx, TOP, bx + cw, TOP + ch))
             # The trim cuts into the old label: cover what is left of it with the card's
@@ -88,4 +91,4 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-7.jpg"))
+    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-8.jpg"))
