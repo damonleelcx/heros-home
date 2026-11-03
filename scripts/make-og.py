@@ -1,6 +1,6 @@
 """Render site/img/og-N.jpg, the link-preview card: the six agents, full length.
 
-The first five come straight from og-3.jpg, trimmed at the sides to make room. Suki's figure
+The first five come straight from og-base.jpg, trimmed at the sides to make room. Suki's figure
 is read from her own repository, checked out beside this one. Windows fonts (Georgia,
 Segoe UI, Microsoft YaHei for 阿桥).
 
@@ -18,10 +18,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 AGENTS = os.path.normpath(os.path.join(HERE, "..", ".."))
 FONTS = r"C:\Windows\Fonts"
 
-# The cards already on og-3.jpg, left to right.
+# The cards already on og-base.jpg, left to right.
 BASE = ["Heros", "阿桥", "FORGE", "Vera", "Aoi"]
-BASE_IMAGE = os.path.join(HERE, "..", "site", "img", "og-3.jpg")
-BASE_CARD = 216  # card width on og-3.jpg
+BASE_IMAGE = os.path.join(HERE, "og-base.jpg")
+BASE_CARD = 216  # card width on og-base.jpg
 # name, figure (relative to the agents directory), card colour behind the figure
 SUKI = ("Suki", "ai-social-network/docs/assets/suki-full.png", (178, 175, 208))
 
