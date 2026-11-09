@@ -4,7 +4,7 @@ Heros, 阿桥, FORGE and Vera come straight from og-base.jpg, trimmed at the sid
 Aoi's figure is scripts/aoi-full.jpg, 鸭鸭's is scripts/yaya-full.jpg (cut from her character board). Suki's is read from her own repository, checked out beside this one. Windows fonts (Georgia,
 Segoe UI, Microsoft YaHei for 阿桥).
 
-    python scripts/make-og.py site/img/og-9.jpg
+    python scripts/make-og.py site/img/og-10.jpg
 
 JPEG, not webp: several link-preview crawlers still drop webp. A new filename on every
 change, because crawlers cache the image by URL far longer than the site's own headers say.
@@ -30,7 +30,8 @@ SUKI = ("Suki", "ai-social-network/docs/assets/suki-full.png", (178, 175, 208))
 
 W, H = 1200, 630
 INK, PAPER, LIME, SUN = (11, 11, 10), (243, 241, 234), (221, 232, 106), (239, 227, 95)
-M, GAP, TOP = 36, 10, 118  # outer margin, gap between cards, card top
+M, GAP, TOP = 36, 8, 118  # outer margin, gap between cards, card top
+YAYA_W = 186  # her arm is raised, so her card is wider: the same scale as the others, hand in frame
 
 
 def font(name, size):
@@ -64,18 +65,18 @@ def main(out):
     d.text((W - M, 76), "heros-agent.space", font=font("segoeui.ttf", 19), fill=(169, 167, 157), anchor="rm")
 
     names = BASE + [SUKI[0], YAYA[0]]
-    cw = (W - 2 * M - GAP * (len(names) - 1)) // len(names)
+    cw = (W - 2 * M - GAP * (len(names) - 1) - YAYA_W) // (len(names) - 1)
     ch = H - TOP - M
     base = Image.open(BASE_IMAGE).convert("RGB")
     label = font("seguisb.ttf", 20)
     label_zh = ImageFont.truetype(os.path.join(FONTS, "msyhbd.ttc"), 19)
     trim = (BASE_CARD - cw) // 2
     for i, name in enumerate(names):
-        x = M + i * (cw + GAP)
+        x = M + i * (cw + GAP)  # 鸭鸭 is last, so the wider card moves no one
         if name == AOI[0]:
             c = figure(AOI[1], AOI[2], cw, ch)
         elif name == YAYA[0]:
-            c = figure(YAYA[1], YAYA[2], cw, ch)
+            c = figure(YAYA[1], YAYA[2], YAYA_W, ch)
         elif name in BASE:
             bx = M + i * (BASE_CARD + BASE_GAP) + trim
             c = base.crop((bx, TOP, bx + cw, TOP + ch))
@@ -84,7 +85,7 @@ def main(out):
             c.paste(c.crop((0, ch - 84, 30, ch - 46)), (0, ch - 46))
         else:
             c = figure(os.path.join(AGENTS, SUKI[1]), SUKI[2], cw, ch)
-        img.paste(c, (x, TOP), rounded((cw, ch), 16))
+        img.paste(c, (x, TOP), rounded((c.width, ch), 16))
         f = label_zh if any(ord(ch_) > 0x2E80 for ch_ in name) else label
         tw = d.textlength(name, font=f)
         d.rounded_rectangle((x + 10, TOP + ch - 44, x + 10 + tw + 26, TOP + ch - 12), 16, fill=SUN)
@@ -95,4 +96,4 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-9.jpg"))
+    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "site", "img", "og-10.jpg"))
