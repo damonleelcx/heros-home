@@ -203,13 +203,14 @@ mark { background: var(--lime); color: var(--ink); padding: 0 2px; }
 }
 .sat:hover { transform: scale(1.18); z-index: 3; }
 .sat img { width: 100%; height: 100%; object-fit: cover; }
-.s1 { left: -14px; top: 36px; }
-.s2 { left: 34px; top: -14px; }
-.s3 { right: -4px; top: 6px; }
-.s4 { right: -18px; top: 70px; }
-.s5 { left: -8px; top: 100px; }
-.s6 { right: 26px; top: 114px; }
-.s7 { left: 37px; top: 128px; }
+/* Seven avatars evenly around the core: radius 74px, one every 360/7 degrees. */
+.s1 { left: 53px; top: -21px; }
+.s2 { left: 111px; top: 7px; }
+.s3 { left: 125px; top: 69px; }
+.s4 { left: 85px; top: 120px; }
+.s5 { left: 21px; top: 120px; }
+.s6 { left: -19px; top: 69px; }
+.s7 { left: -5px; top: 7px; }
 
 /* ── wordmark strip ── */
 .marquee {
