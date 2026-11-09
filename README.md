@@ -1,6 +1,6 @@
 # Heros Agents
 
-**https://heros-agent.space** — six agents that do real work and say plainly what they did not,
+**https://heros-agent.space** — seven agents that do real work and say plainly what they did not,
 plus **Market watch**: what could move the US stock market over the next two weeks, and which way.
 The whole site is in English and 中文.
 
@@ -14,6 +14,7 @@ The whole site is in English and 中文.
 | **Vera · 维拉** | Prepares legal cases and looks after your health; licensed attorneys and physicians sign off on everything that matters | https://act.heros-agent.space |
 | **Aoi · 葵** | Game night: Texas Hold’em with friends and AI players, and board games designed from your description; play money only | https://play.heros-agent.space |
 | **Suki · SynAgent** | Dating: introduces you to people in your city, coaches the conversation and plans the date; a match takes two yeses. Mobile app, not in the stores yet | https://match.heros-agent.space |
+| **鸭鸭 · 转租鸭 Sublet Duck** | Sublets: compares walking away with subletting when you leave a lease early, drafts the listing from one sentence, helps seekers compare and spot scams; publishing, contact details and viewings wait for your tap. WeChat mini program | https://zhuanzuya.zhiyuwujie.top |
 
 They share three habits: **ask before guessing**, **a person signs off** on anything that costs money or
 can’t be undone, and **keep the record** of who asked, what ran and what changed.

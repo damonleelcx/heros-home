@@ -188,7 +188,7 @@ mark { background: var(--lime); color: var(--ink); padding: 0 2px; }
   text-transform: uppercase; opacity: .7;
 }
 .node-you-l { left: 9%; top: 64%; }
-.node-core-l { right: 8%; top: 78%; }
+.node-core-l { right: 8%; top: 83%; }
 
 .orbit { position: absolute; right: 9%; top: 36%; width: 150px; height: 150px; }
 .core {
@@ -209,6 +209,7 @@ mark { background: var(--lime); color: var(--ink); padding: 0 2px; }
 .s4 { right: -18px; top: 70px; }
 .s5 { left: -8px; top: 100px; }
 .s6 { right: 26px; top: 114px; }
+.s7 { left: 37px; top: 128px; }
 
 /* ── wordmark strip ── */
 .marquee {
@@ -227,6 +228,7 @@ mark { background: var(--lime); color: var(--ink); padding: 0 2px; }
 .wm-vera { font-family: var(--serif); font-style: italic; font-weight: 400; }
 .wm-aoi { font-family: var(--sans); font-weight: 800; letter-spacing: .16em; }
 .wm-suki { font-family: var(--serif); font-weight: 400; }
+.wm-yaya { font-family: "Noto Sans SC", var(--sans); font-weight: 700; }
 
 /* ── sections ── */
 section.agents, section.principles, section.closing {
@@ -383,7 +385,7 @@ h2 { font-size: clamp(30px, 4.2vw, 54px); line-height: 1.08; letter-spacing: -.0
   .node { left: 8%; top: 52%; }
   .node-you-l { left: 5%; top: 72%; }
   .orbit { right: 6%; top: 46%; transform: scale(.85); }
-  .node-core-l { right: 5%; top: 88%; }
+  .node-core-l { right: 5%; top: 94%; }
   .facts { grid-template-columns: 1fr; }
   .facts li { flex-direction: row; align-items: baseline; gap: 10px; }
   .pill-grey { padding: 8px 16px; }
